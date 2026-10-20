@@ -1,4 +1,16 @@
 import { SERVER_URL } from './config'
+import { Capacitor } from '@capacitor/core'
+import { ApiError } from './api-errors'
+import {
+  downloadLocalFile,
+  getLocalAttachmentUrl,
+  importLocalData,
+  readLocalFileDataUrl,
+  requestLocalApi,
+  uploadLocalAttachment,
+} from './local/localApi'
+
+export { ApiError } from './api-errors'
 
 const API_BASE_URL = import.meta.env.PROD ? SERVER_URL : (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8788')
 
@@ -20,22 +32,16 @@ export type AuthResponse = {
   user: User
 }
 
-export class ApiError extends Error {
-  status: number
-
-  constructor(status: number, message: string) {
-    super(message)
-    this.name = 'ApiError'
-    this.status = status
-  }
-}
-
 type JsonBody = Record<string, unknown>
 
 export async function apiRequest<T>(
   path: string,
   options: Omit<RequestInit, 'body'> & { body?: JsonBody } = {},
 ): Promise<T> {
+  if (Capacitor.isNativePlatform()) {
+    return requestLocalApi<T>(path, { method: options.method, body: options.body })
+  }
+
   const headers = new Headers(options.headers)
   if (options.body !== undefined) {
     headers.set('Content-Type', 'application/json')
@@ -139,6 +145,10 @@ async function readFileError(response: Response): Promise<string> {
 }
 
 async function downloadApiFile(path: string, fallbackFilename: string): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    await downloadLocalFile(path, fallbackFilename)
+    return
+  }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
   })
@@ -219,6 +229,11 @@ export async function exportMarkdown(): Promise<void> {
 
 export async function exportZip(): Promise<void> {
   await downloadApiFile('/api/exports/zip', '初记完整导出.zip')
+}
+
+export async function importJsonFile(file: File): Promise<number> {
+  if (Capacitor.isNativePlatform()) return importLocalData(file)
+  throw new ApiError(501, '当前网页版暂不支持从文件导入，请使用手机本机版')
 }
 
 // ── DailyPlan ──────────────────────────────────────────────
@@ -1146,6 +1161,7 @@ export async function deleteHonor(honorId: number, password: string): Promise<{ 
 }
 
 export async function uploadAttachment(ownerType: 'honor' | 'memory' | 'project', ownerId: number, file: File): Promise<Attachment> {
+  if (Capacitor.isNativePlatform()) return await uploadLocalAttachment(ownerType, ownerId, file) as Attachment
   const formData = new FormData()
   formData.set('owner_type', ownerType)
   formData.set('owner_id', String(ownerId))
@@ -1166,6 +1182,7 @@ export async function uploadAttachment(ownerType: 'honor' | 'memory' | 'project'
 }
 
 export function getAttachmentUrl(attachmentId: number): string {
+  if (Capacitor.isNativePlatform()) return getLocalAttachmentUrl(attachmentId)
   return `${API_BASE_URL}/api/attachments/${attachmentId}`
 }
 
@@ -1238,6 +1255,9 @@ export type IcsImportResponse = {
 }
 
 export async function importIcs(file: File): Promise<IcsImportResponse> {
+  if (Capacitor.isNativePlatform()) {
+    return requestLocalApi<IcsImportResponse>('/api/schedule/import-ics', { method: 'POST', body: { ics_text: await file.text() } })
+  }
   const formData = new FormData()
   formData.set('file', file)
   const response = await fetch(`${API_BASE_URL}/api/schedule/import-ics`, {
@@ -1260,6 +1280,9 @@ export async function importSchedulePhoto(file: File): Promise<{
   imported: number
   items: Course[]
 }> {
+  if (Capacitor.isNativePlatform()) {
+    return requestLocalApi('/api/schedule/import-photo', { method: 'POST', body: { filename: file.name, image_data_url: await readLocalFileDataUrl(file) } })
+  }
   const formData = new FormData()
   formData.set('file', file)
   const response = await fetch(`${API_BASE_URL}/api/schedule/import-photo`, {
@@ -1320,6 +1343,7 @@ export async function deleteMemory(id: number, password: string): Promise<{ ok: 
 }
 
 export async function uploadMemoryAttachment(memoryId: number, file: File): Promise<Attachment> {
+  if (Capacitor.isNativePlatform()) return await uploadLocalAttachment('memory', memoryId, file) as Attachment
   const formData = new FormData()
   formData.set('owner_type', 'memory')
   formData.set('owner_id', String(memoryId))
@@ -1388,6 +1412,7 @@ export async function deleteProject(id: number, password: string): Promise<{ ok:
 }
 
 export async function uploadProjectAttachment(projectId: number, file: File): Promise<Attachment> {
+  if (Capacitor.isNativePlatform()) return await uploadLocalAttachment('project', projectId, file) as Attachment
   const formData = new FormData()
   formData.set('owner_type', 'project')
   formData.set('owner_id', String(projectId))
