@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+.npm-cache/
+
+# Local data
+data/personal_vault.db
+data/*.db
+data/*.db-*
+data/*.key
+data/session_secret.key
+data/delete_password.key
+data/attachments/*
+data/exports/*
+backups/*
+logs/*
+data_backup_*
+data_backup_final_*
+
+# Keep directory placeholders
+!data/attachments/.gitkeep
+!data/exports/.gitkeep
+!backups/.gitkeep
+!logs/.gitkeep
+
+# Environment
+.env
+backend/.env
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.aider*

@@ -82,4 +82,3 @@ npm run build:apk
 ## 许可证
 
 本项目以 MIT License 发布，详见 [LICENSE](LICENSE)。第三方依赖仍适用各自的许可证，见 `frontend/package.json`、`frontend/package-lock.json` 和 `backend/requirements.txt`。
-

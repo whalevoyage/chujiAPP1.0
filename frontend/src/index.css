@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family:
+    "PingFang SC", "Noto Sans SC", "Hiragino Sans GB",
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f7f4ee;
+  color: #1f2933;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  background: #f7f4ee;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  background: #f7f4ee;
+}
+
+button, input, select, textarea { font: inherit; }
+button { touch-action: manipulation; }
+
+::selection {
+  background: rgba(107, 122, 90, 0.18);
+  color: #1f2933;
+}
+
+/* ── 基础组件样式 ── */
+
+@layer components {
+  .input {
+    @apply h-11 w-full rounded-xl border px-3 text-sm outline-none transition;
+  }
+  .button-primary {
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .button-secondary {
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .button-danger {
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
+
+/* 输入框 */
+.input {
+  min-height: 44px;
+  border-color: #e6ded3 !important;
+  background: #fffdf8 !important;
+  color: #1f2933 !important;
+  box-shadow: none !important;
+}
+textarea.input { line-height: 1.65; }
+.input::placeholder { color: #8a8178; }
+.input:focus {
+  border-color: #6b7a5a !important;
+  box-shadow: 0 0 0 3px rgba(107, 122, 90, 0.12) !important;
+}
+
+/* 主要按钮 */
+.button-primary {
+  min-height: 44px;
+  border: 1px solid #6b7a5a !important;
+  background: #6b7a5a !important;
+  color: #fffdf8 !important;
+  box-shadow: none !important;
+}
+.button-primary:hover { background: #5f704f !important; }
+
+/* 次要按钮 */
+.button-secondary {
+  min-height: 44px;
+  border-color: #e6ded3 !important;
+  background: #fffdf8 !important;
+  color: #2c2c2c !important;
+  box-shadow: none !important;
+}
+.button-secondary:hover {
+  border-color: #cfc3b5 !important;
+  background: #f5f1ea !important;
+  color: #1f2933 !important;
+}
+
+/* 危险按钮 */
+.button-danger {
+  min-height: 44px;
+  border-color: rgba(184, 92, 92, 0.42) !important;
+  background: #fff8f6 !important;
+  color: #9d4e4e !important;
+  box-shadow: none !important;
+}
+.button-danger:hover {
+  border-color: rgba(184, 92, 92, 0.65) !important;
+  background: #faeeee !important;
+}
+
+/* 焦点环 */
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid rgba(107, 122, 90, 0.35);
+  outline-offset: 1px;
+}
+
+/* 页面头部 */
+main > div.mx-auto > header {
+  border-color: #e6ded3 !important;
+}
+
+/* 移动端底部间距 */
+@media (max-width: 767px) {
+  main { padding-bottom: 5.75rem !important; }
+}
+
+/* 横向滚动（课表、今日安排卡片） */
+.schedule-scroll, .schedule-table {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.schedule-scroll::-webkit-scrollbar { display: none; }
+
+/* 防止 Capacitor WebView 横向滚动 */
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* 安全区适配 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 767px) {
+    nav.fixed.bottom-0 {
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
+  }
+}
