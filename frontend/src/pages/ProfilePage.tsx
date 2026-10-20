@@ -35,6 +35,7 @@ import {
   exportMarkdown,
   exportZip,
   getApiKeySettings,
+  getDeletePasswordStatus,
   importJsonFile,
   listBackups,
   restoreBackup,
@@ -43,6 +44,7 @@ import {
   type ApiKeySettingsUpdate,
   type AuthResponse,
   type BackupRecord,
+  type DeletePasswordStatus,
 } from '../api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import DeletePasswordDialog from '../components/DeletePasswordDialog'
@@ -89,6 +91,7 @@ export default function ProfilePage() {
   const [deletePasswordMsg, setDeletePasswordMsg] = useState('')
   const [deletePasswordError, setDeletePasswordError] = useState('')
   const [deletePasswordSaving, setDeletePasswordSaving] = useState(false)
+  const [deletePasswordStatus, setDeletePasswordStatus] = useState<DeletePasswordStatus | null>(null)
   const [showMediaWall, setShowMediaWall] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [pendingDeleteBackup, setPendingDeleteBackup] = useState<BackupRecord | null>(null)
@@ -123,6 +126,11 @@ export default function ProfilePage() {
     if (showApiKeys) void refreshApiKeys()
   }, [showApiKeys, refreshApiKeys])
 
+  useEffect(() => {
+    if (!showDeletePassword) return
+    getDeletePasswordStatus().then(setDeletePasswordStatus).catch(() => setDeletePasswordStatus(null))
+  }, [showDeletePassword])
+
   async function handlePasswordChange(event: FormEvent) {
     event.preventDefault()
     setMessage('')
@@ -152,7 +160,7 @@ export default function ProfilePage() {
     event.preventDefault()
     setDeletePasswordMsg('')
     setDeletePasswordError('')
-    if (!oldDeletePassword) { setDeletePasswordError('请输入旧删除密码'); return }
+    if ((!Capacitor.isNativePlatform() || deletePasswordStatus?.has_password) && !oldDeletePassword) { setDeletePasswordError('请输入旧删除密码'); return }
     if (!newDeletePassword) { setDeletePasswordError('请输入新删除密码'); return }
     if (newDeletePassword !== confirmDeletePassword) { setDeletePasswordError('两次输入的新密码不一致'); return }
     const okDel = await confirm({ title: '确认修改？', message: '确认修改删除密码？', confirmText: '确认修改' })
@@ -160,6 +168,7 @@ export default function ProfilePage() {
     setDeletePasswordSaving(true)
     try {
       await changeDeletePassword(oldDeletePassword, newDeletePassword)
+      setDeletePasswordStatus({ configured: true, has_password: true })
       setOldDeletePassword('')
       setNewDeletePassword('')
       setConfirmDeletePassword('')
@@ -370,7 +379,7 @@ export default function ProfilePage() {
             </label>
 
             {/* 天气 */}
-            <label className="block rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-3">
+            {!Capacitor.isNativePlatform() ? <label className="block rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-3">
               <span className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                 和风天气 Key
                 <span className={`rounded-full px-2 py-0.5 text-[10px] ${apiKeys?.weather_api_key.configured ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
@@ -381,7 +390,7 @@ export default function ProfilePage() {
               <input className="input mt-1.5 h-9 text-xs" placeholder="API Host，例如：xxxxx.qweatherapi.com" value={weatherApiHost} onChange={e => setWeatherApiHost(e.target.value)} />
               <input className="input mt-2 h-9 text-xs" type="password" placeholder="修改配置：输入新 Key，留空不修改" value={weatherKey} onChange={e => setWeatherKey(e.target.value)} />
               <p className="mt-1 text-[10px] text-slate-400">天气地区通过地区选择器设置</p>
-            </label>
+            </label> : <p className="rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-3 text-xs text-slate-500">手机本机版不请求实时天气服务，天气卡片会显示离线状态。</p>}
 
             {/* OCR */}
             <label className="block rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-3">
@@ -520,7 +529,7 @@ export default function ProfilePage() {
       </section>
 
       {/* 安全中心 - 可折叠 */}
-      <section className="rounded-2xl border border-[#E6DED3] bg-white p-5">
+      <section className={`rounded-2xl border border-[#E6DED3] bg-white p-5 ${Capacitor.isNativePlatform() ? 'hidden' : ''}`}>
         <button type="button" onClick={() => setShowPassword((v) => !v)} className="flex w-full items-center justify-between text-left">
           <span className="text-base font-bold">
             <KeyRound className="mr-2 inline h-4 w-4 text-[#6B7A5A]" />
@@ -554,7 +563,7 @@ export default function ProfilePage() {
         {showDeletePassword ? (
           <form className="mt-4 grid gap-3" onSubmit={handleChangeDeletePassword}>
             <p className="text-xs text-slate-500">删除密码用于删除荣誉、回忆、项目等数据时的二次验证。</p>
-            <PasswordField label="旧删除密码" value={oldDeletePassword} onChange={setOldDeletePassword} />
+            {!Capacitor.isNativePlatform() || deletePasswordStatus?.has_password ? <PasswordField label="旧删除密码" value={oldDeletePassword} onChange={setOldDeletePassword} /> : null}
             <PasswordField label="新删除密码" value={newDeletePassword} onChange={setNewDeletePassword} />
             <PasswordField label="确认新删除密码" value={confirmDeletePassword} onChange={setConfirmDeletePassword} />
             {deletePasswordMsg ? <p className="rounded-xl border border-emerald-400/30 bg-emerald-50 p-2 text-sm text-emerald-700">{deletePasswordMsg}</p> : null}
@@ -566,9 +575,11 @@ export default function ProfilePage() {
         ) : null}
       </section>
 
-      <button type="button" onClick={handleLogout} className="button-danger max-w-xs">
-        <LogOut className="h-4 w-4" />退出登录
-      </button>
+      {!Capacitor.isNativePlatform() ? (
+        <button type="button" onClick={handleLogout} className="button-danger max-w-xs">
+          <LogOut className="h-4 w-4" />退出登录
+        </button>
+      ) : null}
 
       <p className="text-center text-[11px] text-slate-300 pt-2">本项目由王鑫焱所作</p>
 

@@ -57,7 +57,7 @@ async function userProfile(): Promise<Obj> {
     user_id: USER_ID,
     username: 'local',
     nickname: '我',
-    role: 'admin',
+    role: 'user',
     is_active: true,
     must_change_password: false,
     created_at: now(),
