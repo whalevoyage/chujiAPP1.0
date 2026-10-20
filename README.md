@@ -12,6 +12,24 @@
 - 管理员账户、删除确认和审计记录
 - PWA 与 Capacitor Android 工程
 
+## Android 手机本机版
+
+Android 版可直接安装使用，不需要电脑、局域网或远程 FastAPI 服务器。首次打开会自动建立本机个人档案；计划、打卡、日记、复盘记录、课表、成绩、回忆、项目、附件和备份都保存在应用私有目录的加密 SQLite 数据库中。普通记录和附件可离线新增、查看、编辑和删除。
+
+可选联网功能包括 AI 复盘/成绩分析、课表照片 OCR 和实时天气。AI/OCR Key 可在手机内配置，模型请求从手机直接发送给你配置的服务商，不经过本项目服务器；实时天气需要天气服务商 Key 和网络。不开启这些服务不影响其他本机功能。
+
+手机本机版支持导入初记 JSON 和完整 ZIP 备份。ZIP 中的附件也会一起导入；旧版服务器 JSON 不含附件原文件。导出通过 Android 分享面板保存或发送文件。卸载应用会清除手机内的数据；更换手机或卸载前请先导出 JSON/ZIP。
+
+构建 Android 调试安装包需要 Node.js、npm、JDK 21 和 Android SDK：
+
+```powershell
+cd frontend
+npm ci
+npm run build:apk
+```
+
+生成文件位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。此调试包已使用 Android 调试签名，可在 Android 手机上直接侧载安装；如果要上架应用商店或发布正式更新，需要使用你自己保管的发布签名重新构建。
+
 ## 技术栈
 
 - 前端：React、TypeScript、Vite、Tailwind CSS、PWA
@@ -61,20 +79,21 @@ npm ci
 npm run build
 ```
 
-构建 Android 调试包时，先将 API 地址设为你自己的 HTTPS 服务：
+构建独立手机本机版不需要配置服务器地址：
 
 ```powershell
-$env:VITE_SERVER_URL = 'https://your-domain.example'
+cd frontend
+npm ci
 npm run build:apk
 ```
 
-`build:apk` 当前生成 Android 调试包，不是应用商店发布包。正式发布还需要配置自己的 Android 发布签名。若前后端同域部署，可将 `VITE_SERVER_URL` 留空。
+若需要将 Android 壳连接到自托管服务器，才配置 `CAPACITOR_SERVER_URL` 为 HTTPS 地址。网页/PWA 远程模式可使用 `VITE_SERVER_URL`。`build:apk` 当前生成 Android 调试包，不是应用商店发布包。
 
 ## 部署与隐私
 
 - 数据库、附件、导出和备份保存在运行应用的机器上。
 - 后端默认绑定 `127.0.0.1`；公网访问应通过配置了 HTTPS 的反向代理。
-- 需要使用 AI、天气或 OCR 时，在自己的 `.env` 中配置服务密钥。AI 功能会将相应记录发送给你配置的服务提供方，请先确认其隐私政策。
+- 自托管模式需要在自己的 `.env` 中配置服务密钥。手机本机版的 AI/OCR Key 保存在手机加密数据库中；调用时，相应提示和数据会发送给你配置的模型服务提供方。
 - 上传和备份内容可能包含个人资料；请妥善保管数据目录与备份文件。
 
 详细部署说明见 [DEPLOY.md](DEPLOY.md)。

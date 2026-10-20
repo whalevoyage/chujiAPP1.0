@@ -9,6 +9,11 @@ const config: CapacitorConfig = {
   appId: 'com.chuji.personal',
   appName: '初记',
   webDir: 'dist',
+  plugins: {
+    CapacitorSQLite: {
+      androidIsEncryption: true,
+    },
+  },
   ...(serverUrl ? { server: { url: serverUrl } } : {}),
 };
 

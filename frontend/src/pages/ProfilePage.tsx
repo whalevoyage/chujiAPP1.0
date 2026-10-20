@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 
 import {
   apiRequest,
@@ -34,6 +35,7 @@ import {
   exportMarkdown,
   exportZip,
   getApiKeySettings,
+  importJsonFile,
   listBackups,
   restoreBackup,
   updateApiKeySettings,
@@ -199,7 +201,7 @@ export default function ProfilePage() {
       setAiKey('')
       setWeatherKey('')
       setOcrKey('')
-      setKeyMsg('API Key 已保存到服务端 .env，页面不会显示完整 Key')
+      setKeyMsg(Capacitor.isNativePlatform() ? 'API Key 已保存到本机；模型和天气调用仍需要联网。' : 'API Key 已保存到服务端 .env，页面不会显示完整 Key')
       setTimeout(() => setKeyMsg(''), 3000)
     } catch (err) {
       setKeyMsg(err instanceof ApiError ? err.message : '保存失败')
@@ -221,6 +223,25 @@ export default function ProfilePage() {
       setDataError(err instanceof ApiError ? err.message : '导出失败')
     } finally {
       setExporting(null)
+    }
+  }
+
+  async function handleImportJson(file: File | undefined) {
+    if (!file) return
+    const ok = await confirm({
+      title: '导入并替换本机数据？',
+      message: '导入会替换这台手机当前保存的记录。请先导出现有数据作为备份。',
+      confirmText: '导入并替换',
+    })
+    if (!ok) return
+    setDataMessage('')
+    setDataError('')
+    try {
+      const count = await importJsonFile(file)
+      setDataMessage(`导入完成，共导入 ${count} 条记录。`)
+      await refreshBackups()
+    } catch (err) {
+      setDataError(err instanceof ApiError ? err.message : '导入失败')
     }
   }
 
@@ -285,6 +306,10 @@ export default function ProfilePage() {
         <p className="text-sm font-semibold text-[#6B7A5A]">初记</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-wide">我的</h1>
       </header>
+
+      {Capacitor.isNativePlatform() ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">手机本机版：日记、计划、课表、附件等数据保存在此设备，无需登录服务器。</p>
+      ) : null}
 
       {/* 用户信息 */}
       <section className="grid gap-3 sm:grid-cols-3">
@@ -417,16 +442,26 @@ export default function ProfilePage() {
                 </button>
                 <button type="button" onClick={() => handleExport('zip')} disabled={exporting !== null} className="button-secondary text-xs">
                   {exporting === 'zip' ? <LoadingIcon /> : <Package className="h-4 w-4" />}
-                  压缩包
+                  完整压缩包
                 </button>
               </div>
+              {Capacitor.isNativePlatform() ? (
+                <div className="mt-4 border-t border-[#E6DED3] pt-3">
+                  <label className="button-secondary inline-flex cursor-pointer text-xs">
+                    <FileJson className="h-4 w-4" />
+                    导入 JSON / ZIP
+                    <input type="file" accept=".json,.zip,application/json,application/zip" className="hidden" onChange={(event) => { void handleImportJson(event.target.files?.[0]); event.currentTarget.value = '' }} />
+                  </label>
+                  <p className="mt-2 text-[11px] text-slate-500">支持初记 JSON 和完整 ZIP。旧版服务器 JSON 不含附件原文件；完整 ZIP 会一并迁移其中的附件。</p>
+                </div>
+              ) : null}
             </div>
 
             <div className="mb-4 rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-4">
               <h3 className="flex items-center gap-2 text-sm font-bold">
                 <Database className="h-4 w-4 text-[#6B7A5A]" />数据备份
               </h3>
-              <p className="mt-1 text-xs text-slate-500">备份会打包 data 目录和数据库到 backups 目录；系统每天首次打开会自动备份一次。</p>
+              <p className="mt-1 text-xs text-slate-500">{Capacitor.isNativePlatform() ? '备份保存在手机应用私有数据中；更换手机或重装前，请通过“数据文件”导出到其他位置。' : '备份会打包 data 目录和数据库到 backups 目录；系统每天首次打开会自动备份一次。'}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={handleCreateBackup} disabled={backupAction !== null} className="button-primary text-xs">
                   {backupAction === 'create' ? <LoadingIcon /> : <Database className="h-4 w-4" />}
