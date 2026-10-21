@@ -2,6 +2,18 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { ApiError } from '../api-errors'
+import { MAX_IMPORT_ATTACHMENT_BYTES, MAX_IMPORT_ENTRIES, MAX_IMPORT_TOTAL_BYTES, validateZipEnvelope } from './zipSafety'
+import {
+  clearLocalAttachmentUrlCache,
+  deleteLocalAttachment,
+  exposeAttachment,
+  getLocalAttachmentUrl,
+  migrateLegacyAttachments,
+  removeLocalAttachmentFile,
+  readLocalAttachmentBytes,
+  stageLocalAttachmentFile,
+  uploadLocalAttachment,
+} from './attachments'
 import {
   deleteRow,
   exportAllRows,
@@ -18,7 +30,9 @@ type LocalOptions = { method?: string; body?: Record<string, unknown> }
 type Obj = Record<string, unknown>
 
 const USER_ID = 1
-const urlsByAttachment = new Map<number, string>()
+const DELETE_PASSWORD_ITERATIONS = 240_000
+const MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
+let attachmentMigration: Promise<void> | null = null
 const now = () => new Date().toISOString()
 const today = () => {
   const date = new Date()
@@ -83,16 +97,9 @@ async function attachmentRows(ownerType?: string, ownerId?: number): Promise<Obj
   return rows.filter((item) => (!ownerType || item.owner_type === ownerType) && (ownerId === undefined || asNumber(item.owner_id) === ownerId))
     .sort((a, b) => asText(b.created_at).localeCompare(asText(a.created_at)))
 }
-function exposeAttachment(row: Obj): Obj {
-  const dataUrl = asText(row.data_url)
-  if (dataUrl && row.id) urlsByAttachment.set(asNumber(row.id), dataUrl)
-  const publicRow = { ...row }
-  delete publicRow.data_url
-  return publicRow
-}
 async function withAttachments(entity: 'memories' | 'projects' | 'honors', row: Obj): Promise<Obj> {
   const owner = entity === 'memories' ? 'memory' : entity === 'projects' ? 'project' : 'honor'
-  const files = (await attachmentRows(owner, asNumber(row.id))).map(exposeAttachment)
+  const files = await Promise.all((await attachmentRows(owner, asNumber(row.id))).map(exposeAttachment))
   return { ...row, attachments: files, attachment_count: files.length }
 }
 async function allData(): Promise<Record<string, LocalRow[]>> { return exportAllRows() }
@@ -117,6 +124,8 @@ function parseIcs(text: string): Obj[] {
 }
 
 export async function requestLocalApi<T>(path: string, options: LocalOptions = {}): Promise<T> {
+  attachmentMigration ??= migrateLegacyAttachments()
+  await attachmentMigration
   const url = new URL(path, 'http://local.app')
   const p = url.pathname.replace(/\/$/, '') || '/'
   const method = (options.method ?? 'GET').toUpperCase()
@@ -195,7 +204,7 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
   if (p.startsWith('/api/tasks')) {
     const tasks = await all('tasks')
     if (p === '/api/tasks/today' || p === '/api/tasks') {
-      let rows = tasks.filter((task) => task.is_active !== false)
+      const rows = tasks.filter((task) => task.is_active !== false)
       if (method === 'POST') return await taskResponse(await created('tasks', body, { title: '新任务', is_active: true, priority: 0, sort_order: tasks.length })) as T
       rows.sort((a, b) => asNumber(a.sort_order) - asNumber(b.sort_order) || asNumber(b.priority) - asNumber(a.priority))
       return await Promise.all(rows.map(taskResponse)) as T
@@ -213,7 +222,7 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
     if (p === '/api/tasks/streak') {
       const days = [...new Set((await all('task_logs')).filter((log) => log.status === 'completed').map((log) => asText(log.log_date)))].sort().reverse()
       let streak = 0
-      let cursor = new Date(`${today()}T12:00:00`)
+      const cursor = new Date(`${today()}T12:00:00`)
       for (const day of days) {
         if (day !== `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`) break
         streak += 1; cursor.setDate(cursor.getDate() - 1)
@@ -426,9 +435,11 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
   }
   if (p === '/api/settings/delete-password' && method === 'PUT') {
     const current = await getMeta('delete_password')
-    if (current && current !== body.old_password) fail(400, '旧删除密码不正确')
+    if (current && !(await verifyLocalDeletePassword(asText(body.old_password)))) fail(400, '旧删除密码不正确')
     if (!current && body.old_password) fail(400, '本机尚未设置删除密码')
-    await setMeta('delete_password', asText(body.new_password))
+    const nextPassword = asText(body.new_password).trim()
+    if (nextPassword.length < 8) fail(400, '新删除密码至少需要 8 位')
+    await setMeta('delete_password', JSON.stringify(await hashLocalDeletePassword(nextPassword)))
     return { ok: true } as T
   }
 
@@ -449,15 +460,15 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
     if (method === 'PUT') return await withAttachments('honors', await save('honors', { ...row, ...body, id, updated_at: now() })) as T
     if (method === 'DELETE') {
       await assertDeletePassword(body.password)
-      for (const file of await attachmentRows('honor', id)) await deleteRow('attachments', asNumber(file.id))
+      for (const file of await attachmentRows('honor', id)) await deleteLocalAttachment(asNumber(file.id))
       await deleteRow('honors', id); return { ok: true } as T
     }
   }
-  if (p === '/api/attachments/all' && method === 'GET') return (await attachmentRows()).map(exposeAttachment) as T
+  if (p === '/api/attachments/all' && method === 'GET') return await Promise.all((await attachmentRows()).map(exposeAttachment)) as T
   if (p.startsWith('/api/attachments/')) {
     const id = idAt(2), row = await byId('attachments', id, '附件')
-    if (method === 'DELETE') { await assertDeletePassword(body.password); await deleteRow('attachments', id); urlsByAttachment.delete(id); return { ok: true } as T }
-    if (method === 'GET') return row as T
+    if (method === 'DELETE') { await assertDeletePassword(body.password); await deleteLocalAttachment(id); return { ok: true } as T }
+    if (method === 'GET') return await exposeAttachment(row) as T
   }
 
   if (p === '/api/memories' && method === 'GET') {
@@ -469,7 +480,7 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
     const id = idAt(2), row = await byId('memories', id, '回忆')
     if (method === 'GET') return await withAttachments('memories', row) as T
     if (method === 'PUT') return await withAttachments('memories', await save('memories', { ...row, ...body, id, updated_at: now() })) as T
-    if (method === 'DELETE') { await assertDeletePassword(body.password); await deleteRow('memories', id); for (const file of await attachmentRows('memory', id)) await deleteRow('attachments', asNumber(file.id)); return { ok: true } as T }
+    if (method === 'DELETE') { await assertDeletePassword(body.password); for (const file of await attachmentRows('memory', id)) await deleteLocalAttachment(asNumber(file.id)); await deleteRow('memories', id); return { ok: true } as T }
   }
   if (p === '/api/projects' && method === 'GET') {
     const rows = (await all('projects')).filter((row) => searchMatch(row, q.get('q') ?? '', ['name', 'project_type', 'tech_stack', 'summary']))
@@ -480,7 +491,7 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
     const id = idAt(2), row = await byId('projects', id, '项目')
     if (method === 'GET') return await withAttachments('projects', row) as T
     if (method === 'PUT') return await withAttachments('projects', await save('projects', { ...row, ...body, id, updated_at: now() })) as T
-    if (method === 'DELETE') { await assertDeletePassword(body.password); await deleteRow('projects', id); for (const file of await attachmentRows('project', id)) await deleteRow('attachments', asNumber(file.id)); return { ok: true } as T }
+    if (method === 'DELETE') { await assertDeletePassword(body.password); for (const file of await attachmentRows('project', id)) await deleteLocalAttachment(asNumber(file.id)); await deleteRow('projects', id); return { ok: true } as T }
   }
 
   // 课表与 iCalendar 文件导入。照片 OCR 是联网功能，离线时给出清楚提示。
@@ -551,18 +562,34 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
     const id = idAt(2), action = segments[3], row = await byId('backups', id, '备份')
     if (action === 'restore' && method === 'POST') {
       const snapshot = bodyOf(row.snapshot)
-      const currentData = await allData()
-      delete currentData.backups
-      await replaceAllRows(snapshot as Record<string, unknown[]>)
-      const recovery = await created('backups', {
-        filename: `恢复前备份-${now().replace(/[:.]/g, '-')}.json`,
-        snapshot: currentData,
-        size: new TextEncoder().encode(JSON.stringify(currentData)).length,
-        sha256: '',
-        status: 'success',
-        error_message: null,
-      })
-      return { ok: true, recovery_backup: recovery.filename } as T
+      if (typeof row.sha256 === 'string' && row.sha256) {
+        const snapshotHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(snapshot)))
+        if (snapshotHash !== row.sha256.toLowerCase()) fail(400, '本机备份 SHA256 校验失败')
+      }
+      await ensureAttachmentMigrationComplete()
+      const recoveryFilename = `恢复前备份-${now().replace(/[:.]/g, '-')}.json`
+      const recoverySnapshot = await allData()
+      const previousPaths = attachmentPaths(recoverySnapshot)
+      const recoveryData = { ...recoverySnapshot }
+      delete recoveryData.backups
+      const recovery = await makeRecoveryBackup(recoveryFilename, recoveryData)
+      try {
+        await save('backups', recovery)
+        await replaceAllRows(snapshot as Record<string, unknown[]>, { preserveBackups: true })
+        clearLocalAttachmentUrlCache()
+        attachmentMigration = null
+        attachmentMigration = migrateLegacyAttachments()
+        await attachmentMigration
+        if ((await all('attachments')).some((item) => Boolean(item.data_url))) fail(400, '备份中的附件迁移失败，恢复已回滚')
+        return { ok: true, recovery_backup: recovery.filename } as T
+      } catch (error) {
+        const newPaths = [...attachmentPaths(await allData())].filter((filePath) => !previousPaths.has(filePath))
+        await replaceAllRows(recoverySnapshot)
+        clearLocalAttachmentUrlCache()
+        for (const filePath of newPaths) await removeLocalAttachmentFile(filePath)
+        attachmentMigration = null
+        throw error
+      }
     }
     if (method === 'DELETE') { await assertDeletePassword(body.password); await deleteRow('backups', id); return { ok: true } as T }
   }
@@ -588,7 +615,71 @@ async function diaryResponse(row: Obj): Promise<Obj> {
 }
 async function assertDeletePassword(password: unknown) {
   const configured = await getMeta('delete_password')
-  if (configured && configured !== password) fail(403, '删除密码不正确')
+  if (configured && !(await verifyLocalDeletePassword(asText(password)))) fail(403, '删除密码不正确')
+}
+
+type LocalDeletePasswordRecord = {
+  algorithm: 'PBKDF2-SHA256'
+  iterations: number
+  salt: string
+  hash: string
+}
+
+async function hashLocalDeletePassword(password: string): Promise<LocalDeletePasswordRecord> {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const key = await crypto.subtle.importKey('raw', toArrayBuffer(new TextEncoder().encode(password)), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: toArrayBuffer(salt), iterations: DELETE_PASSWORD_ITERATIONS },
+    key,
+    256,
+  )
+  return {
+    algorithm: 'PBKDF2-SHA256',
+    iterations: DELETE_PASSWORD_ITERATIONS,
+    salt: bytesToBase64(salt),
+    hash: bytesToBase64(new Uint8Array(bits)),
+  }
+}
+
+async function verifyLocalDeletePassword(password: string): Promise<boolean> {
+  const stored = await getMeta('delete_password')
+  if (!stored || !password) return false
+  let parsed: unknown
+  try { parsed = JSON.parse(stored) } catch { parsed = null }
+  if (parsed && typeof parsed === 'object') {
+    const record = parsed as Partial<LocalDeletePasswordRecord>
+    if (
+      record.algorithm !== 'PBKDF2-SHA256'
+      || !Number.isInteger(record.iterations)
+      || Number(record.iterations) < 10_000
+      || Number(record.iterations) > 1_000_000
+      || !record.salt
+      || !record.hash
+    ) return false
+    try {
+      const salt = base64ToBytes(record.salt)
+      const expected = base64ToBytes(record.hash)
+      const iterations = Number(record.iterations)
+      const key = await crypto.subtle.importKey('raw', toArrayBuffer(new TextEncoder().encode(password)), 'PBKDF2', false, ['deriveBits'])
+      const bits = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', hash: 'SHA-256', salt: toArrayBuffer(salt), iterations },
+        key,
+        expected.length * 8,
+      ))
+      if (bits.length !== expected.length) return false
+      let difference = 0
+      for (let index = 0; index < bits.length; index += 1) difference |= bits[index] ^ expected[index]
+      return difference === 0
+    } catch {
+      return false
+    }
+  }
+
+  // Old local releases stored this value in plaintext. Rehash only after a
+  // successful match so a failed migration never invalidates the old password.
+  if (stored !== password) return false
+  await setMeta('delete_password', JSON.stringify(await hashLocalDeletePassword(password)))
+  return true
 }
 
 async function createScoreCard(payload: Obj): Promise<Obj> {
@@ -614,14 +705,61 @@ async function updateScoreCard(row: Obj, payload: Obj): Promise<Obj> {
   return save('score_cards', next)
 }
 async function createBackup(): Promise<Obj> {
+  await ensureAttachmentMigrationComplete()
   const snapshot = await allData()
   delete snapshot.backups
+  snapshot.attachments = (snapshot.attachments ?? []).map((row) => {
+    const safe = { ...row }
+    delete safe.data_url
+    return safe
+  })
   const text = JSON.stringify(snapshot)
   const createdAt = now()
   return save('backups', {
     user_id: USER_ID, filename: `chuji-local-${createdAt.replace(/[:.]/g, '-')}.json`, size: new TextEncoder().encode(text).length,
-    sha256: '', status: 'success', error_message: null, created_at: createdAt, snapshot,
+    sha256: await sha256Hex(new TextEncoder().encode(text)), status: 'success', error_message: null, created_at: createdAt, snapshot,
   })
+}
+
+async function ensureAttachmentMigrationComplete(): Promise<void> {
+  await migrateLegacyAttachments()
+  if ((await all('attachments')).some((item) => Boolean(item.data_url))) {
+    fail(409, '仍有旧版附件未迁移，备份或导入已暂停；原附件数据已保留，请先重新打开附件页面完成迁移。')
+  }
+}
+
+function attachmentPaths(data: Record<string, unknown[]>): Set<string> {
+  const rows = Array.isArray(data.attachments) ? data.attachments : []
+  return new Set(rows.map((raw) => asText(bodyOf(raw).local_path)).filter(Boolean))
+}
+
+async function makeRecoveryBackup(filename: string, snapshot: Record<string, unknown[]>): Promise<Obj> {
+  const serialized = JSON.stringify(snapshot)
+  return {
+    user_id: USER_ID,
+    filename,
+    snapshot,
+    size: new TextEncoder().encode(serialized).length,
+    sha256: await sha256Hex(new TextEncoder().encode(serialized)),
+    status: 'success',
+    error_message: null,
+    created_at: now(),
+  }
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', toArrayBuffer(bytes))
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function safeArchiveFilename(filename: string): string {
+  const cleaned = Array.from(filename)
+    .filter((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127)
+    .map((character) => '\\/:*?"<>|'.includes(character) ? '_' : character)
+    .join('')
+    .replace(/^\.+/, '')
+    .slice(0, 120)
+  return cleaned || 'attachment.bin'
 }
 
 const exportNames: Record<string, string> = {
@@ -640,7 +778,15 @@ const importNames: Record<string, string> = {
 }
 function publicExport(data: Record<string, LocalRow[]>) {
   const result: Obj = { format: 'chuji-local-v1', exported_at: now(), scope: 'current_user', current_user: { id: USER_ID, username: 'local', nickname: '我', role: 'admin' } }
-  for (const [entity, key] of Object.entries(exportNames)) result[key] = data[entity] ?? []
+  for (const [entity, key] of Object.entries(exportNames)) {
+    const rows = data[entity] ?? []
+    result[key] = entity === 'attachments' ? rows.map((raw) => {
+      const row = { ...raw }
+      delete row.data_url
+      delete row.local_path
+      return row
+    }) : rows
+  }
   return result
 }
 function importedCollections(value: Obj): Record<string, unknown[]> {
@@ -652,6 +798,7 @@ function importedCollections(value: Obj): Record<string, unknown[]> {
       result[entity] = rows.map((raw) => {
         const row = bodyOf(raw)
         const next: Obj = { ...row, user_id: USER_ID }
+        if (entity === 'attachments') delete next.local_path
         if (entity === 'score_cards' && !next.modules_json) next.modules_json = asText(next.subjects_json, '[]')
         return next
       })
@@ -669,19 +816,7 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 export { fileToDataUrl as readLocalFileDataUrl }
-export async function uploadLocalAttachment(ownerType: 'honor' | 'memory' | 'project', ownerId: number, file: File): Promise<Obj> {
-  const dataUrl = await fileToDataUrl(file)
-  const bytes = Math.max(0, Math.floor((dataUrl.split(',')[1]?.length ?? 0) * 3 / 4))
-  const row = await created('attachments', {
-    owner_type: ownerType, owner_id: ownerId, filename: file.name, mime_type: file.type || null,
-    size: file.size || bytes, sha256: '', data_url: dataUrl,
-  })
-  urlsByAttachment.set(asNumber(row.id), dataUrl)
-  return exposeAttachment(row)
-}
-export function getLocalAttachmentUrl(id: number): string {
-  return urlsByAttachment.get(id) ?? ''
-}
+export { getLocalAttachmentUrl, uploadLocalAttachment }
 
 async function shareTextFile(filename: string, content: string, mimeType: string) {
   const path = `chuji/${filename}`
@@ -702,8 +837,14 @@ function base64ToBytes(value: string): Uint8Array {
   const binary = atob(value)
   return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy.buffer as ArrayBuffer
+}
 async function shareZipFile(filename: string, contents: Record<string, Uint8Array>) {
   const archive = zipSync(contents, { level: 6 })
+  if (archive.length > MAX_IMPORT_ARCHIVE_BYTES) fail(413, '完整 ZIP 不能超过 100 MB；请分批导出或减少附件后重试')
   const path = `chuji/${filename}`
   const result = await Filesystem.writeFile({ path, data: bytesToBase64(archive), directory: Directory.Cache, recursive: true })
   const uri = result.uri || (await Filesystem.getUri({ path, directory: Directory.Cache })).uri
@@ -722,18 +863,25 @@ export async function downloadLocalFile(path: string, fallbackFilename: string):
     return shareTextFile('初记阅读文档.md', lines.join('\n'), 'text/markdown')
   }
   if (path.endsWith('/zip')) {
+    await ensureAttachmentMigrationComplete()
     const json = strToU8(JSON.stringify(data, null, 2))
-    const manifest: Obj = { source: 'chuji-android-local', format_version: 1, exported_at: data.exported_at, scope: 'current_user', attachment_files: [] }
+    const manifest: Obj = { source: 'chuji-android-local', format_version: 1, created_at: now(), exported_at: data.exported_at, scope: 'current_user', attachment_files: [] }
     const files: Record<string, Uint8Array> = { 'export.json': json, 'manifest.json': strToU8(JSON.stringify(manifest, null, 2)) }
-    for (const row of await all('attachments')) {
-      const dataUrl = asText(row.data_url)
-      const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
-      if (base64 && dataUrl.includes(',')) {
-        const archivePath = `attachments/${asNumber(row.id)}_${asText(row.filename, 'attachment.bin').replace(/[\\/:*?"<>|]/g, '_')}`
-        const bytes = base64ToBytes(base64)
-        files[archivePath] = bytes
-        manifest.attachment_files = [...manifest.attachment_files as unknown[], { attachment_id: row.id, filename: row.filename, archive_path: archivePath, size: bytes.length }]
-      }
+    const attachmentRows = await all('attachments')
+    if (attachmentRows.length + 2 > MAX_IMPORT_ENTRIES) fail(413, '附件超过 500 个，无法生成单个本机 ZIP')
+    let totalBytes = json.length + (files['manifest.json']?.length ?? 0)
+    for (const row of attachmentRows) {
+      const bytes = await readLocalAttachmentBytes(row)
+      if (!bytes) fail(400, `附件“${asText(row.filename, '未命名')}”缺少本地文件，无法生成完整 ZIP`)
+      if (bytes.length > MAX_IMPORT_ATTACHMENT_BYTES) fail(413, '附件超过 20 MB，无法包含在本机 ZIP 导出中')
+      totalBytes += bytes.length
+      if (totalBytes > MAX_IMPORT_TOTAL_BYTES) fail(413, '附件与数据展开后超过 250 MB，无法生成本机 ZIP')
+      const archivePath = `attachments/${asNumber(row.id)}_${safeArchiveFilename(asText(row.filename, 'attachment.bin'))}`
+      files[archivePath] = bytes
+      manifest.attachment_files = [...manifest.attachment_files as unknown[], {
+        attachment_id: row.id, filename: asText(row.filename), archive_path: archivePath,
+        size: bytes.length, sha256: await sha256Hex(bytes),
+      }]
     }
     files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
     return shareZipFile('初记完整导出.zip', files)
@@ -742,39 +890,88 @@ export async function downloadLocalFile(path: string, fallbackFilename: string):
   return shareTextFile(filename, JSON.stringify(data, null, 2), 'application/json')
 }
 export async function importLocalData(file: File): Promise<number> {
+  attachmentMigration ??= migrateLegacyAttachments()
+  await attachmentMigration
+  await ensureAttachmentMigrationComplete()
+  if (file.size > MAX_IMPORT_ARCHIVE_BYTES) fail(413, '导入文件不能超过 100 MB')
   let parsed: unknown
   let zipEntries: Record<string, Uint8Array> | null = null
+  let manifest: Obj | null = null
   if (file.name.toLowerCase().endsWith('.zip')) {
-    try { zipEntries = unzipSync(new Uint8Array(await file.arrayBuffer())) } catch { fail(400, 'ZIP 文件损坏或格式不受支持') }
+    const archiveBytes = new Uint8Array(await file.arrayBuffer())
+    validateZipEnvelope(archiveBytes)
+    try { zipEntries = unzipSync(archiveBytes) } catch { fail(400, 'ZIP 文件损坏或格式不受支持') }
     const exportFile = zipEntries['export.json']
     if (!exportFile) fail(400, 'ZIP 中未找到 export.json 数据文件')
     try { parsed = JSON.parse(strFromU8(exportFile)) } catch { fail(400, 'ZIP 中的 JSON 数据无法解析') }
+    const manifestBytes = zipEntries['manifest.json']
+    if (!manifestBytes) fail(400, 'ZIP 中未找到 manifest.json 清单文件')
+    try { manifest = bodyOf(JSON.parse(strFromU8(manifestBytes))) } catch { fail(400, 'ZIP 清单无法解析') }
+    if (asNumber(manifest.format_version) !== 1 || !Array.isArray(manifest.attachment_files)) fail(400, 'ZIP 清单版本或附件列表无效')
   } else {
-    try { parsed = JSON.parse(await file.text()) } catch { fail(400, '无法识别该文件，请选择初记 JSON 或 ZIP 数据导出文件') }
+    try { parsed = JSON.parse(new TextDecoder().decode(await file.arrayBuffer())) } catch { fail(400, '无法识别该文件，请选择初记 JSON 或 ZIP 数据导出文件') }
   }
   const collections = importedCollections(bodyOf(parsed))
   if (!Object.keys(collections).length) fail(400, '文件中没有可导入的初记数据')
+  const recoverySnapshot = await allData()
+  const previousPaths = attachmentPaths(recoverySnapshot)
+  const recoveryData = { ...recoverySnapshot }
+  delete recoveryData.backups
+  const recovery = await makeRecoveryBackup(`导入前备份-${now().replace(/[:.]/g, '-')}.json`, recoveryData)
+  const stagedPaths: string[] = []
   if (zipEntries) {
-    const manifestBytes = zipEntries['manifest.json']
-    let manifest: Obj = {}
-    try { if (manifestBytes) manifest = bodyOf(JSON.parse(strFromU8(manifestBytes))) } catch { /* attachments can be inferred from their archive names */ }
-    const attachmentFiles = Array.isArray(manifest.attachment_files) ? manifest.attachment_files as Obj[] : []
-    const attachments = collections.attachments ?? []
-    collections.attachments = attachments.map((raw) => {
-      const row = bodyOf(raw)
-      const item = attachmentFiles.find((entry) => asNumber(entry.attachment_id) === asNumber(row.id))
-      const fallbackName = Object.keys(zipEntries ?? {}).find((name) => name.startsWith(`attachments/${asNumber(row.id)}_`))
-      const archivePath = asText(item?.archive_path, fallbackName ?? '')
-      const bytes = archivePath ? zipEntries?.[archivePath] : undefined
-      if (!bytes) return row
-      const mime = asText(row.mime_type, 'application/octet-stream')
-      return { ...row, data_url: `data:${mime};base64,${bytesToBase64(bytes)}`, size: bytes.length }
-    })
+    try {
+      const attachments = collections.attachments ?? []
+      const attachmentFiles = manifest?.attachment_files as Obj[]
+      if (attachmentFiles.length > 500) fail(400, 'ZIP 附件数量超过 500 个')
+      const ids = new Set<number>()
+      const paths = new Set<string>()
+      const archiveAttachmentPaths = Object.keys(zipEntries).filter((name) => name.startsWith('attachments/'))
+      const stagedById = new Map<number, Obj>()
+      for (const item of attachmentFiles) {
+        const id = asNumber(item.attachment_id, -1)
+        const archivePath = asText(item.archive_path)
+        if (!Number.isInteger(id) || id <= 0 || ids.has(id) || paths.has(archivePath)) fail(400, 'ZIP 清单包含重复或无效的附件记录')
+        ids.add(id); paths.add(archivePath)
+        const bytes = zipEntries[archivePath]
+        if (!bytes || !archiveAttachmentPaths.includes(archivePath)) fail(400, 'ZIP 清单引用了不存在的附件文件')
+        if (bytes.length > MAX_IMPORT_ATTACHMENT_BYTES || (item.size !== undefined && asNumber(item.size, -1) !== bytes.length)) fail(400, 'ZIP 附件大小与清单不一致')
+        const hash = await sha256Hex(bytes)
+        if (item.sha256 && asText(item.sha256).toLowerCase() !== hash) fail(400, 'ZIP 附件 SHA256 校验失败')
+        const metadata = attachments.map(bodyOf).find((row) => asNumber(row.id) === id)
+        if (!metadata) fail(400, 'ZIP 清单中的附件在导出数据中不存在')
+        if (item.filename && asText(item.filename) !== asText(metadata.filename)) fail(400, 'ZIP 清单与附件文件名不一致')
+        const staged = await stageLocalAttachmentFile(asText(item.filename, asText(metadata.filename, 'attachment.bin')), bytes)
+        stagedPaths.push(staged.local_path)
+        stagedById.set(id, { ...metadata, ...staged, data_url: undefined })
+      }
+      if (archiveAttachmentPaths.some((name) => !paths.has(name))) fail(400, 'ZIP 包含未在清单中声明的附件文件')
+      collections.attachments = attachments.map((raw) => {
+        const row = bodyOf(raw)
+        const staged = stagedById.get(asNumber(row.id))
+        return staged ? { ...row, ...staged } : row
+      })
+    } catch (error) {
+      for (const localPath of stagedPaths) await removeLocalAttachmentFile(localPath)
+      throw error
+    }
   }
-  await replaceAllRows(collections)
-  await userProfile()
-  urlsByAttachment.clear()
-  for (const attachment of await all('attachments')) if (attachment.data_url) urlsByAttachment.set(asNumber(attachment.id), asText(attachment.data_url))
+  try {
+    await save('backups', recovery)
+    await replaceAllRows(collections, { preserveBackups: true })
+    clearLocalAttachmentUrlCache()
+    attachmentMigration = migrateLegacyAttachments()
+    await attachmentMigration
+    if ((await all('attachments')).some((item) => Boolean(item.data_url))) fail(400, '附件迁移失败，导入已回滚')
+    await userProfile()
+  } catch (error) {
+    const newPaths = [...attachmentPaths(await allData())].filter((localPath) => !previousPaths.has(localPath))
+    await replaceAllRows(recoverySnapshot)
+    clearLocalAttachmentUrlCache()
+    for (const localPath of new Set([...stagedPaths, ...newPaths])) await removeLocalAttachmentFile(localPath)
+    attachmentMigration = null
+    throw error
+  }
   return Object.values(collections).reduce((count, rows) => count + rows.length, 0)
 }
 
@@ -785,6 +982,13 @@ async function callModel(settings: Obj, kind: 'ai' | 'ocr', messages: ChatMessag
   const model = asText(kind === 'ocr' ? settings.ocr_model || settings.ai_model : settings.ai_model, 'gpt-4o-mini').trim()
   if (!apiKey) fail(400, '请先在“我的 → API Key 配置”中填写模型 Key；不填写时本地记录功能仍可离线使用。')
   if (!baseUrl || !model) fail(400, '请完善模型 Base URL 和模型名称')
+  let parsedBaseUrl: URL
+  try { parsedBaseUrl = new URL(baseUrl) } catch { fail(400, '模型 Base URL 格式无效') }
+  const localDevHost = ['localhost', '127.0.0.1', '[::1]'].includes(parsedBaseUrl.hostname)
+  if (parsedBaseUrl.protocol !== 'https:' && !(import.meta.env.DEV && parsedBaseUrl.protocol === 'http:' && localDevHost)) {
+    fail(400, '不允许通过非加密 HTTP 发送模型 Key 和个人数据。')
+  }
+  if (parsedBaseUrl.username || parsedBaseUrl.password) fail(400, 'Base URL 不要包含用户名或密码')
   const endpoint = baseUrl.endsWith('/chat/completions') ? baseUrl : `${baseUrl}/chat/completions`
   let response: Response
   try {

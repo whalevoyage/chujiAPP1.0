@@ -95,11 +95,15 @@ export async function setMeta(key: string, value: string): Promise<void> {
   )
 }
 
-export async function replaceAllRows(data: Record<string, unknown[]>): Promise<void> {
+export async function replaceAllRows(data: Record<string, unknown[]>, options: { preserveBackups?: boolean } = {}): Promise<void> {
   const db = await database()
   await db.beginTransaction()
   try {
-    await db.execute('DELETE FROM local_entities; DELETE FROM local_sequences;')
+    if (options.preserveBackups) {
+      await db.execute("DELETE FROM local_entities WHERE entity != 'backups'; DELETE FROM local_sequences WHERE entity != 'backups';")
+    } else {
+      await db.execute('DELETE FROM local_entities; DELETE FROM local_sequences;')
+    }
     for (const [entity, rawRows] of Object.entries(data)) {
       let maxId = 0
       for (const raw of rawRows) {
