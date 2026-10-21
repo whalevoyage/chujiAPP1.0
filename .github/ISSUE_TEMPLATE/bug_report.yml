@@ -1,0 +1,48 @@
+name: 问题报告
+description: 报告可复现的错误或数据问题
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请不要粘贴 API Key、密码、Token、数据库、附件或个人数据。安全漏洞请使用 SECURITY.md 中的私密报告渠道。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 简要说明发生了什么。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 按顺序列出复现问题的步骤。
+      placeholder: |
+        1. 打开……
+        2. 点击……
+        3. 看到……
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 使用模式
+      options:
+        - Android 本机模式
+        - Web / PWA 自托管
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误信息
+      description: 删除其中的密钥、个人数据和服务器路径后再粘贴。
+      render: text
