@@ -59,6 +59,8 @@ export default function ProfilePage() {
   const { confirm, dialog: confirmDialog } = useConfirm()
   const navigate = useNavigate()
   const isAdmin = user?.role === 'admin'
+  const canManageServerSettings = isAdmin || Capacitor.isNativePlatform()
+  const canManageSystemBackups = isAdmin || Capacitor.isNativePlatform()
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -95,16 +97,22 @@ export default function ProfilePage() {
   const [showMediaWall, setShowMediaWall] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [pendingDeleteBackup, setPendingDeleteBackup] = useState<BackupRecord | null>(null)
+  const [pendingRestoreBackup, setPendingRestoreBackup] = useState<BackupRecord | null>(null)
   const [deleteBackupError, setDeleteBackupError] = useState('')
+  const [restoreBackupError, setRestoreBackupError] = useState('')
 
   const refreshBackups = useCallback(async () => {
     setDataError('')
+    if (!canManageSystemBackups) {
+      setBackupRecords([])
+      return
+    }
     try {
       setBackupRecords(await listBackups())
     } catch (err) {
       setDataError(err instanceof ApiError ? err.message : '备份列表加载失败')
     }
-  }, [])
+  }, [canManageSystemBackups])
 
   useEffect(() => { void refreshBackups() }, [refreshBackups])
 
@@ -160,7 +168,7 @@ export default function ProfilePage() {
     event.preventDefault()
     setDeletePasswordMsg('')
     setDeletePasswordError('')
-    if ((!Capacitor.isNativePlatform() || deletePasswordStatus?.has_password) && !oldDeletePassword) { setDeletePasswordError('请输入旧删除密码'); return }
+    if (deletePasswordStatus?.has_password && !oldDeletePassword) { setDeletePasswordError('请输入旧删除密码'); return }
     if (!newDeletePassword) { setDeletePasswordError('请输入新删除密码'); return }
     if (newDeletePassword !== confirmDeletePassword) { setDeletePasswordError('两次输入的新密码不一致'); return }
     const okDel = await confirm({ title: '确认修改？', message: '确认修改删除密码？', confirmText: '确认修改' })
@@ -295,15 +303,23 @@ export default function ProfilePage() {
     if (!ok1) return
     const ok2 = await confirm({ title: '二次确认', message: '恢复会替换当前数据库、附件和导出数据，确认继续？', confirmText: '确认恢复' })
     if (!ok2) return
+    setPendingRestoreBackup(record)
+    setRestoreBackupError('')
+  }
+
+  async function confirmRestoreBackup(password: string) {
+    if (!pendingRestoreBackup) return
     setDataMessage('')
     setDataError('')
-    setBackupAction(`restore-${record.id}`)
+    setBackupAction(`restore-${pendingRestoreBackup.id}`)
+    setRestoreBackupError('')
     try {
-      const result = await restoreBackup(record.id)
+      const result = await restoreBackup(pendingRestoreBackup.id, password)
       setDataMessage(`恢复完成，当前数据已自动保存为：${result.recovery_backup}`)
+      setPendingRestoreBackup(null)
       await refreshBackups()
     } catch (err) {
-      setDataError(err instanceof ApiError ? err.message : '恢复失败')
+      setRestoreBackupError(err instanceof ApiError ? err.message : '恢复失败')
     } finally {
       setBackupAction(null)
     }
@@ -349,7 +365,7 @@ export default function ProfilePage() {
       </section>
 
       {/* API Key 配置 */}
-      <section className="rounded-2xl border border-[#E6DED3] bg-white p-5">
+      <section className={`rounded-2xl border border-[#E6DED3] bg-white p-5 ${canManageServerSettings ? '' : 'hidden'}`}>
         <button type="button" onClick={() => setShowApiKeys((v) => !v)} className="flex w-full items-center justify-between text-left">
           <span className="text-base font-bold">
             <KeyRound className="mr-2 inline h-4 w-4 text-[#6B7A5A]" />
@@ -360,6 +376,9 @@ export default function ProfilePage() {
         {showApiKeys ? (
           <div className="mt-4 space-y-3">
             {keyMsg ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{keyMsg}</p> : null}
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+              配置并使用 AI/OCR 后，相关复盘文字、成绩、课表图片和你提交的内容会发送到你填写的第三方服务。不开启 AI/OCR 时，普通记录仍保存在本机或自托管服务器；手机本机版无需连接本项目服务器。
+            </p>
 
             {/* AI */}
             <label className="block rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-3">
@@ -466,6 +485,7 @@ export default function ProfilePage() {
               ) : null}
             </div>
 
+            {canManageSystemBackups ? <>
             <div className="mb-4 rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-4">
               <h3 className="flex items-center gap-2 text-sm font-bold">
                 <Database className="h-4 w-4 text-[#6B7A5A]" />数据备份
@@ -524,6 +544,7 @@ export default function ProfilePage() {
                 <p className="text-sm text-slate-500">暂无备份文件。</p>
               )}
             </div>
+            </> : <p className="mt-4 text-xs text-slate-500">这里只显示你自己的导出文件；服务器系统备份由管理员管理。</p>}
           </div>
         ) : null}
       </section>
@@ -552,7 +573,7 @@ export default function ProfilePage() {
       </section>
 
       {/* 修改删除密码 */}
-      <section className="rounded-2xl border border-[#E6DED3] bg-white p-5">
+      <section className={`rounded-2xl border border-[#E6DED3] bg-white p-5 ${canManageServerSettings ? '' : 'hidden'}`}>
         <button type="button" onClick={() => setShowDeletePassword((v) => !v)} className="flex w-full items-center justify-between text-left">
           <span className="text-base font-bold">
             <KeyRound className="mr-2 inline h-4 w-4 text-[#6B7A5A]" />
@@ -563,7 +584,7 @@ export default function ProfilePage() {
         {showDeletePassword ? (
           <form className="mt-4 grid gap-3" onSubmit={handleChangeDeletePassword}>
             <p className="text-xs text-slate-500">删除密码用于删除荣誉、回忆、项目等数据时的二次验证。</p>
-            {!Capacitor.isNativePlatform() || deletePasswordStatus?.has_password ? <PasswordField label="旧删除密码" value={oldDeletePassword} onChange={setOldDeletePassword} /> : null}
+            {deletePasswordStatus?.has_password ? <PasswordField label="旧删除密码" value={oldDeletePassword} onChange={setOldDeletePassword} /> : null}
             <PasswordField label="新删除密码" value={newDeletePassword} onChange={setNewDeletePassword} />
             <PasswordField label="确认新删除密码" value={confirmDeletePassword} onChange={setConfirmDeletePassword} />
             {deletePasswordMsg ? <p className="rounded-xl border border-emerald-400/30 bg-emerald-50 p-2 text-sm text-emerald-700">{deletePasswordMsg}</p> : null}
@@ -605,6 +626,16 @@ export default function ProfilePage() {
         error={deleteBackupError}
         onCancel={() => { setPendingDeleteBackup(null); setDeleteBackupError('') }}
         onConfirm={confirmDeleteBackup}
+      />
+      <DeletePasswordDialog
+        open={Boolean(pendingRestoreBackup)}
+        title="验证系统恢复"
+        description={restoreBackupError || `恢复「${pendingRestoreBackup?.filename ?? ''}」会替换整个服务器数据。请输入独立删除/恢复密码继续。`}
+        confirmLabel="确认恢复"
+        loading={backupAction?.startsWith('restore-') ?? false}
+        error={restoreBackupError}
+        onCancel={() => { setPendingRestoreBackup(null); setRestoreBackupError('') }}
+        onConfirm={confirmRestoreBackup}
       />
     </div>
   )

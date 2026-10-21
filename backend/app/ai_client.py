@@ -1,10 +1,15 @@
 from dataclasses import dataclass
+import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import HTTPException, status
 
 from app.config import Settings
+from app.config import get_settings
+
+logger = logging.getLogger("chuji.ai")
 
 
 # 已知支持图片/视觉识别的模型名称关键词
@@ -51,6 +56,23 @@ def chat_url(base_url: str) -> str:
     return f"{base}/chat/completions"
 
 
+def validate_chat_base_url(base_url: str, *, app_env: str) -> None:
+    try:
+        parsed = urlparse(base_url.strip())
+        hostname = parsed.hostname
+    except ValueError:
+        hostname = None
+        parsed = urlparse("")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI/OCR Base URL 不得包含凭据、查询参数或片段")
+    if parsed.scheme == "https" and hostname:
+        return
+    local_hosts = {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme == "http" and hostname in local_hosts and app_env.strip().lower() not in {"prod", "production"}:
+        return
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI/OCR Base URL 必须使用 HTTPS；仅开发环境允许 localhost HTTP")
+
+
 def ai_config(settings: Settings) -> ChatConfig:
     return ChatConfig(
         base_url=settings.ai_base_url,
@@ -83,6 +105,7 @@ def call_chat_completion(
     failure_message: str = "AI 服务暂时不可用",
 ) -> str:
     require_config(config)
+    validate_chat_base_url(config.base_url, app_env=get_settings().app_env)
     payload: dict[str, Any] = {
         "model": config.model.strip(),
         "messages": messages,
@@ -102,6 +125,7 @@ def call_chat_completion(
         data = response.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content")
     except Exception as exc:
+        logger.warning("model request failed model=%s error_type=%s", config.model.strip(), type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=failure_message,

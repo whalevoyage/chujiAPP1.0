@@ -55,7 +55,7 @@ export async function apiRequest<T>(
       credentials: 'include',
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     })
-  } catch (err) {
+  } catch {
     throw new ApiError(0, '网络连接失败，请检查网络设置')
   }
 
@@ -181,9 +181,10 @@ export async function createDailyAutoBackup(): Promise<BackupRecord | null> {
   return apiRequest<BackupRecord | null>('/api/backups/auto-daily', { method: 'POST' })
 }
 
-export async function restoreBackup(backupId: number): Promise<RestoreBackupResponse> {
+export async function restoreBackup(backupId: number, password: string): Promise<RestoreBackupResponse> {
   return apiRequest<RestoreBackupResponse>(`/api/backups/${backupId}/restore`, {
     method: 'POST',
+    body: { password },
   })
 }
 
