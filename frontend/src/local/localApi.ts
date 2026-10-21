@@ -86,7 +86,14 @@ async function stepsForPlan(planId: number): Promise<Obj[]> {
 async function planResponse(plan: Obj): Promise<Obj> {
   const steps = await stepsForPlan(asNumber(plan.id))
   const completed = steps.filter((step) => step.status === 'completed').length
-  return { ...plan, steps, total_steps: steps.length, completed_steps: completed, progress: steps.length ? Math.round(completed / steps.length * 100) : 0 }
+  return { ...plan, steps, total_steps: steps.length, completed_steps: completed, progress: steps.length ? completed / steps.length : 0 }
+}
+async function refreshLocalPlanStatus(planId: number): Promise<void> {
+  const plan = await getRow('daily_plans', planId)
+  if (!plan) return
+  const steps = await stepsForPlan(planId)
+  const completed = steps.length > 0 && steps.every((step) => step.status === 'completed' || step.status === 'skipped')
+  await save('daily_plans', { ...plan, status: completed ? 'completed' : 'active', updated_at: now() } as Obj)
 }
 async function taskResponse(task: Obj): Promise<Obj> {
   const log = (await all('task_logs')).find((item) => asNumber(item.task_id) === asNumber(task.id) && item.log_date === today() && !item.is_makeup) ?? null
@@ -175,23 +182,36 @@ export async function requestLocalApi<T>(path: string, options: LocalOptions = {
   }
   const planStepCreate = p.match(/^\/api\/plans\/(\d+)\/steps$/)
   if (planStepCreate && method === 'POST') {
-    return await created('plan_steps', { ...body, plan_id: Number(planStepCreate[1]) }, {
+    const planId = Number(planStepCreate[1])
+    const step = await created('plan_steps', { ...body, plan_id: planId }, {
       title: '新步骤', start_time: '09:00', end_time: '10:00', status: 'pending', priority: 0, sort_order: (await stepsForPlan(Number(planStepCreate[1]))).length,
-    }) as T
+    })
+    await refreshLocalPlanStatus(planId)
+    return step as T
   }
   if (p === '/api/plan-steps' || p.startsWith('/api/plan-steps/')) {
     const id = idAt(2), action = segments[3]
     if (method === 'GET') return await stepsForPlan(id) as T
-    if (method === 'POST' && segments[3] === 'steps') return await created('plan_steps', { ...body, plan_id: id }, {
-      title: '新步骤', start_time: '09:00', end_time: '10:00', status: 'pending', priority: 0, sort_order: 0,
-    }) as T
+    if (method === 'POST' && segments[3] === 'steps') {
+      const step = await created('plan_steps', { ...body, plan_id: id }, {
+        title: '新步骤', start_time: '09:00', end_time: '10:00', status: 'pending', priority: 0, sort_order: 0,
+      })
+      await refreshLocalPlanStatus(id)
+      return step as T
+    }
     const row = await byId('plan_steps', id, '计划步骤')
-    if (method === 'DELETE') { await deleteRow('plan_steps', id); return { ok: true } as T }
-    if (method === 'PUT') return await save('plan_steps', { ...row, ...body, id, updated_at: now() }) as T
+    if (method === 'DELETE') { await deleteRow('plan_steps', id); await refreshLocalPlanStatus(asNumber(row.plan_id)); return { ok: true } as T }
+    if (method === 'PUT') {
+      const updated = await save('plan_steps', { ...row, ...body, id, updated_at: now() })
+      await refreshLocalPlanStatus(asNumber(row.plan_id))
+      return updated as T
+    }
     if (method === 'POST') {
       const status = action === 'complete' ? 'completed' : action === 'start' ? 'in_progress' : action === 'skip' ? 'skipped' : action === 'delay' ? 'delayed' : asText(row.status)
       const updated = { ...row, status, completed_at: status === 'completed' ? now() : row.completed_at, delay_reason: action === 'delay' ? body.reason : row.delay_reason, skip_reason: action === 'skip' ? body.reason : row.skip_reason, updated_at: now() }
-      return await save('plan_steps', updated) as T
+      const saved = await save('plan_steps', updated)
+      await refreshLocalPlanStatus(asNumber(row.plan_id))
+      return saved as T
     }
   }
   if (p === '/api/reminders/current' || p === '/api/reminders/upcoming') {
