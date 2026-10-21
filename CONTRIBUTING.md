@@ -33,6 +33,7 @@ npm run build
 - 新数据库从 `backend/alembic/versions/` 中的当前基线开始创建。
 - 旧版 SQLite 首次升级时，应用会先写入 `backups/pre-alembic-baseline-*.sqlite` 一致性副本，再运行现有的加法式兼容迁移并标记基线。
 - 后续结构变更通过 Alembic revision 提交。自动生成的迁移必须人工检查；SQLite 表约束变更需要设计可回滚的数据迁移。
+- 新增外键前先运行 `python -m app.integrity_audit`；如发现孤儿记录，应先给出保留或修复方案，不要自动删除数据。
 - 不要删除 `ensure_*_schema()` 旧版兼容函数，直到确认所有支持的旧数据库都能由 Alembic 安全升级。
 
 ## Pull Request
