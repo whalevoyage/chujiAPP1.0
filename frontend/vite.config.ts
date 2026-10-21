@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { VitePWA, type ManifestOptions } from 'vite-plugin-pwa'
+
+const APP_VERSION = readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim()
 
 export default defineConfig({
   plugins: [
@@ -29,7 +32,8 @@ export default defineConfig({
           {
             urlPattern: /^https?:\/\/.*\/api\/.*/i,
             handler: 'NetworkOnly',
-            options: { backgroundSync: { name: 'api-queue' } },
+            // User writes must not be replayed later: delete, restore and check-in
+            // operations are not all idempotent, and API responses are private.
           },
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
@@ -42,9 +46,10 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: '初记 - 个人管理系统',
+        version: APP_VERSION,
+        name: '初记 - Student Growth OS',
         short_name: '初记',
-        description: '个人管理系统：日程、专注、日记、课表、荣誉、项目',
+        description: '从每日计划、执行与复盘，沉淀大学成长档案',
         theme_color: '#F7F4EE',
         background_color: '#F7F4EE',
         display: 'standalone',
@@ -75,7 +80,7 @@ export default defineConfig({
             purpose: 'any maskable',
           },
         ],
-      },
+      } as Partial<ManifestOptions> & { version: string },
     }),
   ],
   server: {

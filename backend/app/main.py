@@ -9,10 +9,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import get_settings, project_path
 from app.database import init_db
+from app.logging_config import configure_application_logging
+from app.version import APP_VERSION
 from app.routers import admin, attachments, auth, backups, data_center, diary, focus, honors, memories, plans, projects, reviews, schedule, scores, settings as settings_router, tasks, weaknesses, weather
 
 
 settings = get_settings()
+logger = configure_application_logging(production=settings.app_env.strip().lower() in {"prod", "production"})
 
 FRONTEND_DIST = project_path("frontend", "dist")
 
@@ -27,26 +30,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        # 不设 HSTS：当前无 HTTPS
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+            "form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob: https: capacitor://localhost; font-src 'self' data:; "
+            "connect-src 'self' https: http://localhost:* http://127.0.0.1:* capacitor://localhost; "
+            "worker-src 'self' blob:; manifest-src 'self'"
+        )
+        if settings.app_env.strip().lower() in {"prod", "production"} and settings.session_cookie_secure:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         return response
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    logger.info("application startup version=%s environment=%s", APP_VERSION, settings.app_env)
     init_db()
     yield
 
 
 app = FastAPI(
     title="初记 API",
-    version="1.0.0",
+    version=APP_VERSION,
     docs_url=None,
     redoc_url=None,
     lifespan=lifespan,
 )
-
-# 安全头（最先添加，确保所有响应都携带）
-app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +65,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type"],
 )
+
+# 外层响应头中间件也会覆盖 CORS 中间件直接返回的预检响应。
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth.router)
 app.include_router(admin.router)
@@ -86,24 +98,33 @@ app.include_router(data_center.router)
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, object]:
+    result: dict[str, object] = {
+        "status": "ok",
+        "version": APP_VERSION,
+        "time": datetime.now(UTC).isoformat(),
+    }
+    if settings.app_env.strip().lower() in {"prod", "production"}:
+        return result
+
     data_dir = project_path("data")
     attachments_dir = project_path("data", "attachments")
     exports_dir = project_path("data", "exports")
     backups_dir = project_path("backups")
     logs_dir = project_path("logs")
-    return {
-        "status": "ok",
-        "app": settings.app_name,
-        "environment": settings.app_env,
-        "time": datetime.now(UTC).isoformat(),
-        "storage": {
+    result.update(
+        {
+            "app": settings.app_name,
+            "environment": settings.app_env,
+            "storage": {
             "data": data_dir.exists(),
             "attachments": attachments_dir.exists(),
             "exports": exports_dir.exists(),
             "backups": backups_dir.exists(),
             "logs": logs_dir.exists(),
-        },
-    }
+            },
+        }
+    )
+    return result
 
 
 # 托管前端静态文件（手机独立运行时使用，API 路由优先）

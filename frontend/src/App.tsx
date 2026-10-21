@@ -1,28 +1,30 @@
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import type { ReactNode } from 'react'
 
 import Shell from './components/Shell'
 import FullScreenLoading from './components/FullScreenLoading'
 import NetworkErrorBanner from './components/NetworkErrorBanner'
-import AdminUsersPage from './pages/AdminUsersPage'
-import CheckinPage from './pages/CheckinPage'
-import DiaryPage from './pages/DiaryPage'
-import HonorsPage from './pages/HonorsPage'
-import LoginPage from './pages/LoginPage'
-import MemoriesPage from './pages/MemoriesPage'
-import PlansPage from './pages/PlansPage'
-import ProfilePage from './pages/ProfilePage'
-import ProjectsPage from './pages/ProjectsPage'
-import ReviewPage from './pages/ReviewPage'
-import SchedulePage from './pages/SchedulePage'
-import ScoreCardsPage from './pages/ScoreCardsPage'
-import TodayPage from './pages/TodayPage'
 import { useAuth } from './auth'
+
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'))
+const CheckinPage = lazy(() => import('./pages/CheckinPage'))
+const DiaryPage = lazy(() => import('./pages/DiaryPage'))
+const HonorsPage = lazy(() => import('./pages/HonorsPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const MemoriesPage = lazy(() => import('./pages/MemoriesPage'))
+const PlansPage = lazy(() => import('./pages/PlansPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const ReviewPage = lazy(() => import('./pages/ReviewPage'))
+const SchedulePage = lazy(() => import('./pages/SchedulePage'))
+const ScoreCardsPage = lazy(() => import('./pages/ScoreCardsPage'))
+const TodayPage = lazy(() => import('./pages/TodayPage'))
 
 function App() {
   return (
     <>
       <NetworkErrorBanner />
+      <Suspense fallback={<FullScreenLoading />}>
       <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
@@ -51,6 +53,7 @@ function App() {
         </Route>
       </Route>
     </Routes>
+      </Suspense>
     </>
   )
 }

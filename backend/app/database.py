@@ -1,5 +1,14 @@
 from collections.abc import Generator
+from contextlib import closing
+from datetime import UTC, datetime
+import logging
+import os
+from pathlib import Path
+import sqlite3
 
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -7,6 +16,8 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from app.config import get_settings, project_path
 from app.models import User, utc_now
 from app.security import hash_password
+
+logger = logging.getLogger("chuji.database")
 
 
 def build_sqlite_url() -> str:
@@ -26,7 +37,66 @@ def init_db() -> None:
     project_path("data", "exports").mkdir(parents=True, exist_ok=True)
     project_path("backups").mkdir(parents=True, exist_ok=True)
     project_path("logs").mkdir(parents=True, exist_ok=True)
-    SQLModel.metadata.create_all(engine)
+    _upgrade_database_schema()
+    ensure_initial_admin()
+
+
+def _alembic_config() -> Config:
+    backend_root = Path(__file__).resolve().parents[1]
+    config = Config(str(backend_root / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", engine.url.render_as_string(hide_password=False).replace("%", "%%"))
+    return config
+
+
+def _user_tables() -> set[str]:
+    with engine.connect() as connection:
+        return {
+            str(row[0])
+            for row in connection.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'").all()
+            if not str(row[0]).startswith("sqlite_")
+        }
+
+
+def _alembic_revision_present() -> bool:
+    if "alembic_version" not in _user_tables():
+        return False
+    with engine.connect() as connection:
+        return connection.exec_driver_sql("SELECT 1 FROM alembic_version LIMIT 1").first() is not None
+
+
+def _backup_legacy_database(prefix: str = "pre-alembic-baseline") -> Path | None:
+    database_path = engine.url.database
+    if not database_path or database_path == ":memory:":
+        return None
+    source_path = Path(database_path)
+    if not source_path.exists():
+        return None
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    backup_path = project_path("backups", f"{prefix}-{timestamp}.sqlite")
+    backup_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with closing(sqlite3.connect(source_path)) as source, closing(sqlite3.connect(backup_path)) as destination:
+            source.backup(destination)
+    except Exception:
+        backup_path.unlink(missing_ok=True)
+        raise
+    return backup_path
+
+
+def _restore_legacy_database(backup_path: Path, database_path: str) -> None:
+    engine.dispose()
+    target_path = Path(database_path)
+    temporary_path = target_path.with_name(f".{target_path.name}.rollback.tmp")
+    temporary_path.unlink(missing_ok=True)
+    for suffix in ("-wal", "-shm"):
+        Path(f"{target_path}{suffix}").unlink(missing_ok=True)
+    with closing(sqlite3.connect(backup_path)) as source, closing(sqlite3.connect(temporary_path)) as destination:
+        source.backup(destination)
+    os.replace(temporary_path, target_path)
+
+
+def _ensure_legacy_schema() -> None:
     ensure_plan_task_schema()
     ensure_diary_schema()
     ensure_review_schema()
@@ -37,7 +107,56 @@ def init_db() -> None:
     ensure_memory_schema()
     ensure_project_schema()
     ensure_user_weather_schema()
-    ensure_initial_admin()
+
+
+def _upgrade_database_schema() -> None:
+    config = _alembic_config()
+    tables = _user_tables()
+    if _alembic_revision_present():
+        current_revisions = _stored_alembic_revisions()
+        current_head = ScriptDirectory.from_config(config).get_current_head()
+        if current_revisions == ([current_head] if current_head else []):
+            return
+        logger.info("database migration started from=%s to=%s", current_revisions, current_head)
+        database_path = engine.url.database
+        backup_path = _backup_legacy_database("pre-alembic-upgrade")
+        if backup_path:
+            logger.info("database migration recovery copy created filename=%s", backup_path.name)
+        try:
+            command.upgrade(config, "head")
+        except Exception:
+            if backup_path and database_path:
+                _restore_legacy_database(backup_path, database_path)
+                logger.error("database migration failed and recovery copy was restored")
+            raise
+        logger.info("database migration completed revision=%s", current_head)
+        return
+    if not tables:
+        command.upgrade(config, "head")
+        return
+
+    # Existing SQLite files are normalized with the legacy additive migration
+    # helpers only once, after a consistent SQLite backup, then stamped to the
+    # baseline so all future schema changes go through Alembic revisions.
+    database_path = engine.url.database
+    backup_path = _backup_legacy_database()
+    if backup_path:
+        logger.info("legacy database baseline copy created filename=%s", backup_path.name)
+    try:
+        SQLModel.metadata.create_all(engine)
+        _ensure_legacy_schema()
+        command.stamp(config, "head")
+        logger.info("legacy database was stamped to current Alembic baseline")
+    except Exception:
+        if backup_path and database_path:
+            _restore_legacy_database(backup_path, database_path)
+            logger.error("legacy database baseline failed and recovery copy was restored")
+        raise
+
+
+def _stored_alembic_revisions() -> list[str]:
+    with engine.connect() as connection:
+        return sorted(str(row[0]) for row in connection.exec_driver_sql("SELECT version_num FROM alembic_version").all())
 
 
 def ensure_plan_task_schema() -> None:

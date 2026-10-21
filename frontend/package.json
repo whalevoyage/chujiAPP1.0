@@ -1,12 +1,14 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "check-version": "node scripts/check-version.mjs",
     "preview": "vite preview",
     "build:apk": "npm run build && npx cap sync android && cd android && gradlew assembleDebug"
   },
@@ -43,6 +45,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^6.4.4"
+    "vite": "^6.4.4",
+    "vitest": "^5.0.5"
   }
 }

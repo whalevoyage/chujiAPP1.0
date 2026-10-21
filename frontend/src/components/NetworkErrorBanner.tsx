@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { WifiOff } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
 
 /**
  * 检测网络状态。
@@ -11,7 +12,7 @@ export function useNetworkStatus(): boolean {
 
   useEffect(() => {
     // Capacitor 原生环境
-    if (typeof (window as any).Capacitor !== 'undefined') {
+    if (Capacitor.isNativePlatform()) {
       import('@capacitor/network').then(({ Network }) => {
         Network.getStatus().then((s) => setOnline(s.connected))
         Network.addListener('networkStatusChange', (s) => {
