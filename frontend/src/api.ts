@@ -1,6 +1,7 @@
 import { SERVER_URL } from './config'
 import { Capacitor } from '@capacitor/core'
 import { ApiError } from './api-errors'
+import { activeDataProvider } from './api/dataProvider'
 import {
   downloadLocalFile,
   getLocalAttachmentUrl,
@@ -38,40 +39,7 @@ export async function apiRequest<T>(
   path: string,
   options: Omit<RequestInit, 'body'> & { body?: JsonBody } = {},
 ): Promise<T> {
-  if (Capacitor.isNativePlatform()) {
-    return requestLocalApi<T>(path, { method: options.method, body: options.body })
-  }
-
-  const headers = new Headers(options.headers)
-  if (options.body !== undefined) {
-    headers.set('Content-Type', 'application/json')
-  }
-
-  let response: Response
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers,
-      credentials: 'include',
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    })
-  } catch {
-    throw new ApiError(0, '网络连接失败，请检查网络设置')
-  }
-
-  const text = await response.text()
-  const data = text ? JSON.parse(text) : null
-
-  if (!response.ok) {
-    // 全局 401 拦截：除 /api/auth/login 外，任意 401 视为会话过期
-    if (response.status === 401 && path !== '/api/auth/login') {
-      window.dispatchEvent(new CustomEvent('auth:session-expired'))
-    }
-    const message = typeof data?.detail === 'string' ? data.detail : '请求失败'
-    throw new ApiError(response.status, message)
-  }
-
-  return data as T
+  return activeDataProvider.request<T>(path, options)
 }
 
 export type BackupRecord = {
