@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import scenarios from '../../../contracts/core-growth-scenarios.json'
 
 const localState = vi.hoisted(() => ({
   tables: new Map<string, Map<number, Record<string, unknown>>>(),
@@ -50,35 +51,43 @@ describe('Local API core growth flows', () => {
   })
 
   it('creates a plan, completes a step, and reports full progress', async () => {
+    const scenario = scenarios.planProgress
+    const expected = scenario.expected
     const plan = await requestLocalApi<{ id: number; progress: number }>('/api/plans', {
       method: 'POST',
-      body: { plan_date: '2026-10-21', title: '复习线性代数' },
+      body: scenario.plan,
     })
-    expect(plan.progress).toBe(0)
+    expect(plan.progress).toBe(expected.initial_progress)
 
     const step = await requestLocalApi<{ id: number; status: string }>(`/api/plans/${plan.id}/steps`, {
       method: 'POST',
-      body: { title: '完成习题', start_time: '09:00', end_time: '10:00' },
+      body: scenario.step,
     })
-    expect(step.status).toBe('pending')
+    expect(step.status).toBe(expected.step_status)
 
     await requestLocalApi(`/api/plan-steps/${step.id}/complete`, { method: 'POST' })
     const updated = await requestLocalApi<{ progress: number; completed_steps: number; status: string }>(`/api/plans/${plan.id}`)
-    expect(updated).toMatchObject({ progress: 1, completed_steps: 1, status: 'completed' })
+    expect(updated).toMatchObject({
+      progress: expected.completed_progress,
+      completed_steps: expected.completed_steps,
+      status: expected.plan_status,
+    })
   })
 
   it('creates a task, records one check-in, and returns the daily count', async () => {
+    const scenario = scenarios.taskCheckin
+    const expected = scenario.expected
     const task = await requestLocalApi<{ id: number }>('/api/tasks', {
       method: 'POST',
-      body: { title: '阅读专业书' },
+      body: scenario.task,
     })
     const checkin = await requestLocalApi<{ task_id: number; status: string }>(`/api/tasks/${task.id}/checkin`, {
       method: 'POST',
-      body: { minutes: 25 },
+      body: scenario.checkin,
     })
     const stats = await requestLocalApi<{ total: number; completed_today: number }>('/api/tasks/stats')
 
-    expect(checkin).toMatchObject({ task_id: task.id, status: 'completed' })
-    expect(stats).toMatchObject({ total: 1, completed_today: 1 })
+    expect(checkin).toMatchObject({ task_id: task.id, status: expected.checkin_status })
+    expect(stats).toMatchObject({ total: expected.total_tasks, completed_today: expected.completed_today })
   })
 })
