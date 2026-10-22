@@ -1,0 +1,33 @@
+{
+  "planProgress": {
+    "plan": {
+      "plan_date": "2026-10-21",
+      "title": "复习线性代数"
+    },
+    "step": {
+      "title": "完成习题",
+      "start_time": "09:00",
+      "end_time": "10:00"
+    },
+    "expected": {
+      "initial_progress": 0,
+      "step_status": "pending",
+      "completed_progress": 1,
+      "completed_steps": 1,
+      "plan_status": "completed"
+    }
+  },
+  "taskCheckin": {
+    "task": {
+      "title": "阅读专业书"
+    },
+    "checkin": {
+      "minutes": 25
+    },
+    "expected": {
+      "checkin_status": "completed",
+      "total_tasks": 1,
+      "completed_today": 1
+    }
+  }
+}

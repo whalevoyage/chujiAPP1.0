@@ -1,7 +1,9 @@
 import hashlib
 import json
+import logging
 import re
 import shutil
+import stat
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -14,7 +16,7 @@ from sqlmodel import Session, select
 from app.audit import add_audit_log
 from app.config import project_path
 from app.database import engine, get_session, init_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.models import (
     Attachment,
     BackupRecord,
@@ -35,6 +37,7 @@ from app.schemas import BackupRecordRead, DeletePasswordRequest
 
 router = APIRouter(prefix="/api/backups", tags=["backups"])
 exports_router = APIRouter(prefix="/api/exports", tags=["exports"])
+logger = logging.getLogger("chuji.backups")
 
 PROJECT_ROOT = project_path().resolve()
 DATA_DIR = project_path("data").resolve()
@@ -49,6 +52,12 @@ MANIFEST_NAME = "backup_manifest.json"
 MANIFEST_SOURCE = "personal_vault"
 MANIFEST_VERSION = 1
 ALLOWED_ZIP_TOP_LEVEL = {"data", "README.md", "NOTICE.md", MANIFEST_NAME}
+MAX_BACKUP_ZIP_ENTRIES = 100_000
+MAX_BACKUP_UNCOMPRESSED_SIZE = 2 * 1024 * 1024 * 1024
+MAX_BACKUP_MEMBER_SIZE = 1024 * 1024 * 1024
+MAX_BACKUP_ATTACHMENT_SIZE = 20 * 1024 * 1024
+MAX_BACKUP_MANIFEST_SIZE = 2 * 1024 * 1024
+MAX_BACKUP_COMPRESSION_RATIO = 1_000
 
 
 def ensure_storage_dirs() -> None:
@@ -208,7 +217,15 @@ def create_backup_record(
             request=request,
             action=action,
             user_id=user_id,
-            detail={"backup_id": record.id, "filename": path.name, "size": size, "sha256": file_hash},
+            detail={
+                "backup_id": record.id,
+                "filename": path.name,
+                "size": size,
+                "sha256": file_hash,
+                "success": True,
+                "error_reason": None,
+                "recovery_backup": None,
+            },
         )
     if cleanup_auto:
         cleanup_auto_backups(session)
@@ -228,6 +245,9 @@ def has_today_auto_backup(session: Session) -> bool:
 def maybe_create_daily_auto_backup(session: Session, *, request: Request | None, user_id: int) -> BackupRecord | None:
     """Create one automatic backup per day. Failure never blocks login/opening."""
     try:
+        creator = session.get(User, user_id)
+        if creator is None or creator.role != "admin":
+            return None
         ensure_storage_dirs()
         if has_today_auto_backup(session):
             return None
@@ -242,8 +262,22 @@ def maybe_create_daily_auto_backup(session: Session, *, request: Request | None,
         )
         session.commit()
         return record
-    except Exception:
+    except Exception as error:
         session.rollback()
+        logger.warning("daily backup failed user_id=%s error_type=%s", user_id, type(error).__name__)
+        if request is not None:
+            add_audit_log(
+                session,
+                request=request,
+                action="backup.auto_daily_failed",
+                user_id=user_id,
+                detail={
+                    "success": False,
+                    "error_reason": safe_error_message(error),
+                    "recovery_backup": None,
+                },
+            )
+            session.commit()
         return None
 
 
@@ -256,6 +290,9 @@ def trigger_light_backup(
 ) -> BackupRecord | None:
     """Create a lightweight full-data backup after important changes. Failure is silent."""
     try:
+        creator = session.get(User, user_id)
+        if creator is None or creator.role != "admin":
+            return None
         record = create_backup_record(
             session,
             request=request,
@@ -267,8 +304,22 @@ def trigger_light_backup(
         )
         session.commit()
         return record
-    except Exception:
+    except Exception as error:
         session.rollback()
+        logger.warning("light backup failed user_id=%s error_type=%s", user_id, type(error).__name__)
+        if request is not None:
+            add_audit_log(
+                session,
+                request=request,
+                action="backup.light_failed",
+                user_id=user_id,
+                detail={
+                    "success": False,
+                    "error_reason": safe_error_message(error),
+                    "recovery_backup": None,
+                },
+            )
+            session.commit()
         return None
 
 
@@ -305,8 +356,32 @@ def normalize_zip_member(filename: str) -> str:
 def validate_backup_zip(path: Path) -> dict[str, Any]:
     names: set[str] = set()
     with zipfile.ZipFile(path, "r") as zip_file:
-        for item in zip_file.infolist():
-            names.add(normalize_zip_member(item.filename).rstrip("/"))
+        items = zip_file.infolist()
+        if not items or len(items) > MAX_BACKUP_ZIP_ENTRIES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup contains too many files")
+        total_uncompressed = 0
+        for item in items:
+            normalized = normalize_zip_member(item.filename).rstrip("/")
+            if normalized in names:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup contains duplicate paths")
+            names.add(normalized)
+            if len(item.filename) > 1024 or item.flag_bits & 0x41:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup contains an unsupported ZIP entry")
+            if item.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup uses an unsupported compression method")
+            if stat.S_ISLNK(item.external_attr >> 16):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup contains a symbolic link")
+            if item.file_size > MAX_BACKUP_MEMBER_SIZE:
+                raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Backup member is too large")
+            if normalized.startswith("data/attachments/") and item.file_size > MAX_BACKUP_ATTACHMENT_SIZE:
+                raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Backup attachment is too large")
+            if normalized == MANIFEST_NAME and item.file_size > MAX_BACKUP_MANIFEST_SIZE:
+                raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Backup manifest is too large")
+            total_uncompressed += item.file_size
+            if total_uncompressed > MAX_BACKUP_UNCOMPRESSED_SIZE:
+                raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Backup expands beyond the allowed size")
+            if item.file_size and (not item.compress_size or item.file_size / item.compress_size > MAX_BACKUP_COMPRESSION_RATIO):
+                raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Backup compression ratio is too high")
         if MANIFEST_NAME not in names:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup manifest is missing")
         if "data/personal_vault.db" not in names:
@@ -319,7 +394,9 @@ def validate_backup_zip(path: Path) -> dict[str, Any]:
 
 
 def extract_backup_safely(path: Path, destination: Path) -> None:
+    validate_backup_zip(path)
     root = destination.resolve()
+    total_written = 0
     with zipfile.ZipFile(path, "r") as zip_file:
         for item in zip_file.infolist():
             member_name = normalize_zip_member(item.filename)
@@ -330,8 +407,14 @@ def extract_backup_safely(path: Path, destination: Path) -> None:
                 target.mkdir(parents=True, exist_ok=True)
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
+            written = 0
             with zip_file.open(item, "r") as source, target.open("wb") as output:
-                shutil.copyfileobj(source, output)
+                while chunk := source.read(1024 * 1024):
+                    written += len(chunk)
+                    total_written += len(chunk)
+                    if written > MAX_BACKUP_MEMBER_SIZE or total_written > MAX_BACKUP_UNCOMPRESSED_SIZE:
+                        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Backup expands beyond the allowed size")
+                    output.write(chunk)
 
 
 def replace_directory(source: Path, target: Path, rollback_root: Path) -> Path:
@@ -340,10 +423,14 @@ def replace_directory(source: Path, target: Path, rollback_root: Path) -> Path:
         shutil.rmtree(rollback)
     if target.exists():
         shutil.move(str(target), str(rollback))
-    if source.exists():
-        shutil.copytree(source, target)
-    else:
-        target.mkdir(parents=True, exist_ok=True)
+    try:
+        if source.exists():
+            shutil.copytree(source, target)
+        else:
+            target.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        rollback_directory(target, rollback)
+        raise
     return rollback
 
 
@@ -612,7 +699,7 @@ def safe_attachment_file(attachment: Attachment) -> Path | None:
 def create_backup(
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> BackupRecordRead:
     user_id = current_user.id or 0
     path = BACKUPS_DIR / backup_filename("backup")
@@ -630,6 +717,7 @@ def create_backup(
         return backup_response(record)
     except Exception as error:
         session.rollback()
+        logger.error("system backup creation failed user_id=%s error_type=%s", user_id, type(error).__name__)
         message = safe_error_message(error)
         size = path.stat().st_size if path.exists() else 0
         file_hash = sha256_file(path) if path.exists() and path.is_file() else ""
@@ -647,7 +735,12 @@ def create_backup(
             request=request,
             action="backup.create_failed",
             user_id=user_id,
-            detail={"backup_id": record.id, "filename": path.name, "error": message},
+            detail={
+                "backup_id": record.id,
+                "filename": path.name,
+                "success": False,
+                "error_reason": message,
+            },
         )
         session.commit()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Backup failed") from error
@@ -657,7 +750,7 @@ def create_backup(
 def list_backups(
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> list[BackupRecordRead]:
     records = session.exec(select(BackupRecord).order_by(BackupRecord.created_at.desc())).all()
     add_audit_log(
@@ -675,7 +768,7 @@ def list_backups(
 def create_daily_auto_backup(
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> BackupRecordRead | None:
     record = maybe_create_daily_auto_backup(session, request=request, user_id=current_user.id or 0)
     if record is None:
@@ -688,7 +781,7 @@ def create_daily_auto_backup(
 def create_light_backup(
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> BackupRecordRead | None:
     record = trigger_light_backup(session, current_user.id or 0, request=request, reason="manual-light")
     if record is None:
@@ -700,9 +793,10 @@ def create_light_backup(
 @router.post("/{backup_id}/restore")
 def restore_backup(
     backup_id: int,
+    payload: DeletePasswordRequest,
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> dict[str, Any]:
     user_id = current_user.id or 0
     record = session.get(BackupRecord, backup_id)
@@ -712,7 +806,13 @@ def restore_backup(
             request=request,
             action="backup.restore_failed",
             user_id=user_id,
-            detail={"backup_id": backup_id, "reason": "record_not_found"},
+            detail={
+                "backup_id": backup_id,
+                "filename": None,
+                "success": False,
+                "error_reason": "record_not_found",
+                "recovery_backup": None,
+            },
         )
         session.commit()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
@@ -722,10 +822,36 @@ def restore_backup(
             request=request,
             action="backup.restore_failed",
             user_id=user_id,
-            detail={"backup_id": backup_id, "reason": "failed_backup_record"},
+            detail={
+                "backup_id": backup_id,
+                "filename": Path(record.file_path or "").name,
+                "success": False,
+                "error_reason": "failed_backup_record",
+                "recovery_backup": None,
+            },
         )
         session.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed backup cannot be restored")
+
+    filename = Path(record.file_path or "").name
+    try:
+        assert_delete_password(payload)
+    except HTTPException as error:
+        add_audit_log(
+            session,
+            request=request,
+            action="backup.restore_failed",
+            user_id=user_id,
+            detail={
+                "backup_id": backup_id,
+                "filename": filename,
+                "success": False,
+                "error_reason": "reauthentication_failed",
+                "recovery_backup": None,
+            },
+        )
+        session.commit()
+        raise error
 
     try:
         backup_path = resolve_backup_path(record)
@@ -743,24 +869,38 @@ def restore_backup(
         session.commit()
     except HTTPException as error:
         session.rollback()
+        logger.warning("restore preflight failed user_id=%s backup_id=%s status=%s", user_id, backup_id, error.status_code)
         add_audit_log(
             session,
             request=request,
             action="backup.restore_failed",
             user_id=user_id,
-            detail={"backup_id": backup_id, "reason": error.detail},
+            detail={
+                "backup_id": backup_id,
+                "filename": filename,
+                "success": False,
+                "error_reason": str(error.detail),
+                "recovery_backup": None,
+            },
         )
         session.commit()
         raise
     except Exception as error:
         session.rollback()
+        logger.error("restore preflight failed user_id=%s backup_id=%s error_type=%s", user_id, backup_id, type(error).__name__)
         message = safe_error_message(error)
         add_audit_log(
             session,
             request=request,
             action="backup.restore_failed",
             user_id=user_id,
-            detail={"backup_id": backup_id, "reason": message},
+            detail={
+                "backup_id": backup_id,
+                "filename": filename,
+                "success": False,
+                "error_reason": message,
+                "recovery_backup": None,
+            },
         )
         session.commit()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Restore failed") from error
@@ -804,28 +944,41 @@ def restore_backup(
                     detail={
                         "backup_id": backup_id,
                         "filename": backup_path.name,
+                        "success": True,
+                        "error_reason": None,
                         "manifest_kind": manifest.get("backup_kind"),
                         "recovery_backup_id": recovery_id,
                         "recovery_filename": recovery_path.name,
+                        "recovery_backup": recovery_path.name,
                     },
                 )
                 restored_session.commit()
+            logger.info("system restore completed user_id=%s backup_id=%s recovery_id=%s", user_id, backup_id, recovery_id)
         except HTTPException as error:
             engine.dispose()
             init_db()
+            logger.error("system restore failed user_id=%s backup_id=%s status=%s", user_id, backup_id, error.status_code)
             with Session(engine) as failure_session:
                 add_audit_log(
                     failure_session,
                     request=request,
                     action="backup.restore_failed",
                     user_id=user_id,
-                    detail={"backup_id": backup_id, "reason": error.detail, "recovery_filename": recovery_path.name},
+                    detail={
+                        "backup_id": backup_id,
+                        "filename": filename,
+                        "success": False,
+                        "error_reason": str(error.detail),
+                        "recovery_filename": recovery_path.name,
+                        "recovery_backup": recovery_path.name,
+                    },
                 )
                 failure_session.commit()
             raise
         except Exception as error:
             engine.dispose()
             init_db()
+            logger.error("system restore failed user_id=%s backup_id=%s error_type=%s", user_id, backup_id, type(error).__name__)
             message = safe_error_message(error)
             with Session(engine) as failure_session:
                 add_audit_log(
@@ -833,7 +986,14 @@ def restore_backup(
                     request=request,
                     action="backup.restore_failed",
                     user_id=user_id,
-                    detail={"backup_id": backup_id, "reason": message, "recovery_filename": recovery_path.name},
+                    detail={
+                        "backup_id": backup_id,
+                        "filename": filename,
+                        "success": False,
+                        "error_reason": message,
+                        "recovery_filename": recovery_path.name,
+                        "recovery_backup": recovery_path.name,
+                    },
                 )
                 failure_session.commit()
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Restore failed") from error
@@ -847,11 +1007,42 @@ def delete_backup(
     payload: DeletePasswordRequest,
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> dict[str, bool]:
-    assert_delete_password(payload)
+    user_id = current_user.id or 0
+    try:
+        assert_delete_password(payload)
+    except HTTPException as error:
+        add_audit_log(
+            session,
+            request=request,
+            action="backup.delete_failed",
+            user_id=user_id,
+            detail={
+                "backup_id": backup_id,
+                "success": False,
+                "error_reason": "reauthentication_failed",
+                "recovery_backup": None,
+            },
+        )
+        session.commit()
+        raise error
     record = session.get(BackupRecord, backup_id)
     if record is None:
+        add_audit_log(
+            session,
+            request=request,
+            action="backup.delete_failed",
+            user_id=user_id,
+            detail={
+                "backup_id": backup_id,
+                "filename": None,
+                "success": False,
+                "error_reason": "record_not_found",
+                "recovery_backup": None,
+            },
+        )
+        session.commit()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
     filename = Path(record.file_path or "").name
     try:
@@ -866,8 +1057,14 @@ def delete_backup(
         session,
         request=request,
         action="backup.delete",
-        user_id=current_user.id,
-        detail={"backup_id": backup_id, "filename": filename},
+        user_id=user_id,
+        detail={
+            "backup_id": backup_id,
+            "filename": filename,
+            "success": True,
+            "error_reason": None,
+            "recovery_backup": None,
+        },
     )
     session.commit()
     return {"ok": True}
