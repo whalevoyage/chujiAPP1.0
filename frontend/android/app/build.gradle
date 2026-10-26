@@ -1,5 +1,7 @@
 apply plugin: 'com.android.application'
 
+def appVersion = new File(rootProject.projectDir, '../../VERSION').getText('UTF-8').trim()
+
 android {
     namespace "com.chuji.personal"
     compileSdk rootProject.ext.compileSdkVersion
@@ -8,7 +10,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

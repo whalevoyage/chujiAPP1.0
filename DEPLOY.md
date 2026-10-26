@@ -17,7 +17,7 @@ sudo apt update && sudo apt upgrade -y
 # 安装依赖
 sudo apt install -y python3 python3-pip python3-venv nginx certbot python3-certbot-nginx
 
-# 安装 Node.js 18+（使用 NodeSource）
+# 安装 Node.js 20.19+ 或 22.12+（使用 NodeSource）
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
@@ -59,7 +59,7 @@ cd /opt/chu-ji/backend
 # 创建虚拟环境
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.lock
 
 # ☢ 关键：创建 backend/.env（从 .env.example 复制并填入真实 Key）
 cp ../.env.example .env
@@ -110,8 +110,12 @@ sudo systemctl status chu-ji   # 确认 running
 
 ```bash
 curl http://127.0.0.1:8788/health
-# 应返回 {"status":"ok","environment":"production",...}
+# 生产环境只返回状态、版本和时间，不暴露数据目录信息
 ```
+
+### 数据库首次迁移
+
+新数据库由 Alembic 基线创建。旧版 SQLite 首次启动时，应用会先在 `backups/` 中写入 `pre-alembic-baseline-*.sqlite` 一致性备份，再运行保留的加法式兼容迁移并记录当前基线。升级前仍建议另行备份整个 `data/` 与 `backups/` 目录；不要手动删除 `alembic_version` 表。
 
 ---
 
@@ -248,7 +252,7 @@ rm /tmp/update.tar.gz
 # 后端
 cd backend
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.lock
 sudo systemctl restart chu-ji
 
 # 前端

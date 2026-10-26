@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import os
 import re
 from pathlib import Path
 from uuid import uuid4
@@ -40,15 +41,19 @@ def _read_delete_password() -> str:
     configured = get_settings().initial_delete_password.strip()
     if not configured:
         return ""
-    DELETE_PASSWORD_FILE.parent.mkdir(parents=True, exist_ok=True)
-    stored = hash_password(configured)
-    DELETE_PASSWORD_FILE.write_text(stored, encoding="utf-8")
-    return stored
+    _write_delete_password(configured)
+    return DELETE_PASSWORD_FILE.read_text(encoding="utf-8").strip()
 
 
 def _write_delete_password(new_password: str) -> None:
     DELETE_PASSWORD_FILE.parent.mkdir(parents=True, exist_ok=True)
-    DELETE_PASSWORD_FILE.write_text(hash_password(new_password.strip()), encoding="utf-8")
+    temporary_path = DELETE_PASSWORD_FILE.with_name(f".{DELETE_PASSWORD_FILE.name}.{uuid4().hex}.tmp")
+    try:
+        temporary_path.write_text(hash_password(new_password.strip()), encoding="utf-8")
+        os.replace(temporary_path, DELETE_PASSWORD_FILE)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def verify_delete_password(password: str) -> bool:
@@ -59,8 +64,11 @@ def verify_delete_password(password: str) -> bool:
         return False
     if stored.startswith(("$2a$", "$2b$", "$2y$")):
         return verify_password(password.strip(), stored)
-    # Accept a pre-existing plaintext value for migration; new values are always hashed.
-    return hmac.compare_digest(password.strip().encode("utf-8"), stored.encode("utf-8"))
+    # Migrate legacy plaintext exactly once, before accepting the operation.
+    if not hmac.compare_digest(password.strip().encode("utf-8"), stored.encode("utf-8")):
+        return False
+    _write_delete_password(stored)
+    return True
 
 
 def assert_delete_password(payload: DeletePasswordRequest) -> None:
