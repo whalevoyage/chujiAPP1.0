@@ -29,5 +29,69 @@
       "total_tasks": 1,
       "completed_today": 1
     }
+  },
+  "weaknessActionReview": {
+    "weakness": {
+      "title": "复盘拖延",
+      "category": "拖延",
+      "severity": 7,
+      "occur_date": "2026-10-22",
+      "behavior": "临近截止才开始写作业"
+    },
+    "action": {
+      "title": "先写作业提纲",
+      "description": "用二十分钟列出主要观点",
+      "difficulty": 4,
+      "estimated_minutes": 20,
+      "add_to_plan": false,
+      "add_to_task": false
+    },
+    "review": {
+      "report_type": "custom",
+      "start_date": "2026-10-22",
+      "end_date": "2026-10-22"
+    },
+    "expected": {
+      "weakness_count": 1,
+      "completed_actions": 1,
+      "unfinished_actions": 0
+    }
+  },
+  "scoreCard": {
+    "score": {
+      "title": "综合素质测评",
+      "semester": "2026-2027-1",
+      "modules": [
+        {"name": "10%基本素质", "score": 80, "max_score": 100, "note": null},
+        {"name": "65%智育+体育", "score": 90, "max_score": 100, "note": null},
+        {"name": "20%创新素质与实践能力", "score": 70, "max_score": 100, "note": null},
+        {"name": "5%附件分", "score": 100, "max_score": 100, "note": null}
+      ]
+    },
+    "expected": {
+      "total_score": 85.5
+    }
+  },
+  "honorAttachment": {
+    "honor": {
+      "title": "校级优秀学生",
+      "honor_type": "荣誉",
+      "level": "校级",
+      "issuer": "某大学",
+      "award_date": "2026-10-22",
+      "role": "个人",
+      "description": "契约测试记录"
+    },
+    "attachment": {
+      "filename": "certificate.pdf",
+      "mime_type": "application/pdf",
+      "content": "fixture certificate attachment"
+    },
+    "expected": {
+      "owner_type": "honor",
+      "filename": "certificate.pdf",
+      "mime_type": "application/pdf",
+      "content": "fixture certificate attachment"
+    }
   }
 }

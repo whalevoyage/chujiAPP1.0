@@ -17,3 +17,8 @@
 - 增加后端权限与 IDOR 回归测试、前端 ZIP 安全测试和 GitHub Actions CI。
 - 增加版本一致性检查、生产健康检查最小化与安全响应头。
 - 为页面路由启用按需加载。
+- 将本机计划、任务、日记、复盘和成绩路由拆入 feature route 模块。
+- 为计划进度、任务打卡、弱点改进、成绩卡和荣誉附件导入导出增加共享 Local/Remote 契约场景。
+- 拆出 Today、Review、Profile 页面展示组件，并补充组件交互测试。
+- 升级 Tailwind CSS 4.3.3 与 Sharp 0.35.5，清除 npm 审计告警；CI 增加完整依赖审计。
+- Tailwind CSS v4 的浏览器最低版本要求已补充到 README。

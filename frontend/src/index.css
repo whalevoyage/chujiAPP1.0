@@ -1,59 +1,93 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-:root {
-  color-scheme: light;
-  font-family:
-    "PingFang SC", "Noto Sans SC", "Hiragino Sans GB",
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f7f4ee;
-  color: #1f2933;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
 }
 
-* { box-sizing: border-box; }
-
-html {
-  min-width: 320px;
-  background: #f7f4ee;
-  overflow-x: hidden;
+@utility input {
+  @apply h-11 w-full rounded-xl border px-3 text-sm outline-hidden transition;
 }
 
-body {
-  min-width: 320px;
-  min-height: 100vh;
-  margin: 0;
-  overflow-x: hidden;
-  background: #f7f4ee;
+@utility button-primary {
+  @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
 }
 
-button, input, select, textarea { font: inherit; }
-button { touch-action: manipulation; }
-
-::selection {
-  background: rgba(107, 122, 90, 0.18);
-  color: #1f2933;
+@utility button-secondary {
+  @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
 }
 
-/* ── 基础组件样式 ── */
+@utility button-danger {
+  @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+}
 
-@layer components {
-  .input {
-    @apply h-11 w-full rounded-xl border px-3 text-sm outline-none transition;
+@layer utilities {
+  :root {
+    color-scheme: light;
+    font-family:
+      'PingFang SC',
+      'Noto Sans SC',
+      'Hiragino Sans GB',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    background: #f7f4ee;
+    color: #1f2933;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  .button-primary {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+
+  * {
+    box-sizing: border-box;
   }
-  .button-secondary {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+
+  html {
+    min-width: 320px;
+    background: #f7f4ee;
+    overflow-x: hidden;
   }
-  .button-danger {
-    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    overflow-x: hidden;
+    background: #f7f4ee;
   }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button {
+    touch-action: manipulation;
+  }
+
+  ::selection {
+    background: rgba(107, 122, 90, 0.18);
+    color: #1f2933;
+  }
+
+  /* ── 基础组件样式 ── */
 }
 
 /* 输入框 */

@@ -12,7 +12,6 @@ import {
   FileText,
   Image as ImageIcon,
   KeyRound,
-  Loader2,
   LogOut,
   Package,
   RotateCcw,
@@ -21,7 +20,7 @@ import {
   Trophy,
   Users,
 } from 'lucide-react'
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 
@@ -51,6 +50,8 @@ import DeletePasswordDialog from '../components/DeletePasswordDialog'
 import MediaWall from '../components/MediaWall'
 import { useAuth } from '../auth'
 import { useConfirm } from '../hooks/useConfirm'
+import { InfoCard, LoadingIcon, MoreEntry, PasswordField } from './profile/components'
+import { backupStatusLabel as statusLabel, formatBytes, formatDateTime } from './profile/formatters'
 
 type ExportKind = 'json' | 'markdown' | 'zip'
 
@@ -639,64 +640,4 @@ export default function ProfilePage() {
       />
     </div>
   )
-}
-
-function LoadingIcon() {
-  return <Loader2 className="h-4 w-4 animate-spin" />
-}
-
-function MoreEntry({ icon, title, onClick }: { icon: ReactNode; title: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl border border-[#E6DED3] bg-[#FFFDF8] p-3 text-left hover:border-[#6B7A5A]/30"
-    >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#6B7A5A]/20 bg-[#F5F1EA] text-[#6B7A5A]">
-        {icon}
-      </span>
-      <span className="flex-1 truncate text-sm font-bold">{title}</span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-    </button>
-  )
-}
-
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[#E6DED3] bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-3 truncate text-xl font-extrabold">{value}</p>
-    </div>
-  )
-}
-
-function PasswordField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-slate-600">{label}</span>
-      <input type="password" className="input" value={value} onChange={(event) => onChange(event.target.value)} required />
-    </label>
-  )
-}
-
-function formatBytes(size: number): string {
-  if (!Number.isFinite(size) || size <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = size
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) { value /= 1024; unitIndex += 1 }
-  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
-}
-
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
-
-function statusLabel(value: string): string {
-  if (value === 'success') return '成功'
-  if (value === 'failed') return '失败'
-  if (value === 'restored') return '已恢复'
-  return value
 }

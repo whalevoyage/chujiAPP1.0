@@ -215,7 +215,7 @@ export default function SchedulePage() {
               <input className="input" type="number" min={1} max={30} placeholder="结束周" value={form.end_week} onChange={e => updateForm('end_week', e.target.value)} />
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">颜色</span>
-                <input type="color" value={form.color} onChange={e => updateForm('color', e.target.value)} className="h-8 w-8 rounded border cursor-pointer" />
+                <input type="color" value={form.color} onChange={e => updateForm('color', e.target.value)} className="h-8 w-8 rounded-sm border cursor-pointer" />
               </div>
             </div>
             <textarea className="input min-h-16 resize-none py-3" placeholder="备注" value={form.note} onChange={e => updateForm('note', e.target.value)} />

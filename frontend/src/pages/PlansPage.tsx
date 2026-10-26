@@ -267,9 +267,9 @@ export default function PlansPage() {
               <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-slate-500">安排</p>
-                  <h2 className="mt-2 break-words text-xl font-extrabold text-slate-800">{plan.title}</h2>
-                  {plan.main_goal ? <p className="mt-2 break-words text-sm leading-6 text-slate-600">{plan.main_goal}</p> : null}
-                  {plan.note ? <p className="mt-2 break-words text-xs leading-5 text-slate-400">{plan.note}</p> : null}
+                  <h2 className="mt-2 wrap-break-word text-xl font-extrabold text-slate-800">{plan.title}</h2>
+                  {plan.main_goal ? <p className="mt-2 wrap-break-word text-sm leading-6 text-slate-600">{plan.main_goal}</p> : null}
+                  {plan.note ? <p className="mt-2 wrap-break-word text-xs leading-5 text-slate-400">{plan.note}</p> : null}
                 </div>
                 <button type="button" onClick={() => handleDeletePlan(plan)} className="button-danger">
                   <Trash2 className="h-4 w-4" />
@@ -393,7 +393,7 @@ function StepRow({
       {/* Timeline dot */}
       <div
         className={[
-          'absolute -left-[1.45rem] top-[1.15rem] h-3 w-3 rounded-full border-2',
+          'absolute left-[-1.45rem] top-[1.15rem] h-3 w-3 rounded-full border-2',
           isCurrent ? 'border-[#6B7A5A] bg-[#6B7A5A]' : 'border-[#E6DED3] bg-white',
         ].join(' ')}
       />
@@ -404,7 +404,7 @@ function StepRow({
         <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="min-w-0 break-words text-sm font-bold text-slate-700">{step.title}</p>
+              <p className="min-w-0 wrap-break-word text-sm font-bold text-slate-700">{step.title}</p>
               <span className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${statusClass(step.status)}`}>
                 {statusLabel(step.status)}
               </span>
@@ -413,9 +413,9 @@ function StepRow({
               {step.start_time} - {step.end_time}
               {step.enable_reminder && step.remind_time ? ' / 提醒 ' + step.remind_time : ''}
             </p>
-            {step.description ? <p className="mt-2 break-words text-xs leading-5 text-slate-500">{step.description}</p> : null}
-            {step.delay_reason ? <p className="mt-2 break-words text-xs text-amber-600">延期：{step.delay_reason}</p> : null}
-            {step.skip_reason ? <p className="mt-2 break-words text-xs text-slate-500">跳过：{step.skip_reason}</p> : null}
+            {step.description ? <p className="mt-2 wrap-break-word text-xs leading-5 text-slate-500">{step.description}</p> : null}
+            {step.delay_reason ? <p className="mt-2 wrap-break-word text-xs text-amber-600">延期：{step.delay_reason}</p> : null}
+            {step.skip_reason ? <p className="mt-2 wrap-break-word text-xs text-slate-500">跳过：{step.skip_reason}</p> : null}
           </div>
           <div className="flex flex-wrap gap-2">
             {!isDone ? (

@@ -51,7 +51,7 @@ export default function NetworkErrorBanner() {
       className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-sm text-amber-800"
       role="alert"
     >
-      <WifiOff className="h-4 w-4 flex-shrink-0" />
+      <WifiOff className="h-4 w-4 shrink-0" />
       <span>网络不可用，请检查网络连接后重试</span>
     </div>
   )

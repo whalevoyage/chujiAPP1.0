@@ -100,7 +100,7 @@ export default function HelpAssistant({ open, onClose }: Props) {
         <div className="flex items-center gap-2 rounded-xl border border-[#E6DED3] bg-[#FFFDF8] px-3">
           <Search className="h-4 w-4 text-slate-400" />
           <input
-            className="flex-1 bg-transparent py-2.5 text-sm outline-none"
+            className="flex-1 bg-transparent py-2.5 text-sm outline-hidden"
             placeholder="搜索问题..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setExpanded(null) }}

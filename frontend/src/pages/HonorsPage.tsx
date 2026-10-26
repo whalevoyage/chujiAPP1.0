@@ -260,13 +260,13 @@ function HonorCard({ honor, uploading, onEdit, onDelete, onUpload, onDeleteAttac
       {/* 主图片区域 — 自适应 */}
       {mainImg ? (
         <button type="button" onClick={() => onPreview([mainImg], 0)}
-          className="block w-full aspect-[4/3] overflow-hidden bg-[#F5F1EA]">
+          className="block w-full aspect-4/3 overflow-hidden bg-[#F5F1EA]">
           <img src={getAttachmentUrl(mainImg.id)} alt={honor.title}
             className="h-full w-full object-cover hover:scale-105 transition" loading="lazy" />
         </button>
       ) : (
         <button type="button" onClick={() => fileRef.current?.click()}
-          className="flex w-full aspect-[4/3] items-center justify-center bg-[#F5F1EA] hover:bg-[#EFE9DD] transition">
+          className="flex w-full aspect-4/3 items-center justify-center bg-[#F5F1EA] hover:bg-[#EFE9DD] transition">
           <div className="text-center">
             <Upload className="mx-auto h-8 w-8 text-slate-300" />
             <p className="mt-2 text-xs text-slate-400">上传证书或图片</p>

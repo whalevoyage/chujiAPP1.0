@@ -236,9 +236,9 @@ function MemoryCard({ memory, uploading, onEdit, onDelete, onUpload, onPreview }
   const mainImg = images[0] ?? null
 
   return (
-    <article className="group rounded-2xl border border-[#E6DED3] bg-white overflow-hidden hover:shadow-sm transition-shadow">
+    <article className="group rounded-2xl border border-[#E6DED3] bg-white overflow-hidden hover:shadow-xs transition-shadow">
       {/* Image */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-[#F5F1EA]">
+      <div className="relative aspect-4/3 overflow-hidden bg-[#F5F1EA]">
         {mainImg ? (
           <button type="button" onClick={() => onPreview(images, 0)} className="block w-full h-full">
             <img src={getAttachmentUrl(mainImg.id)} alt={memory.title}

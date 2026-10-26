@@ -20,6 +20,7 @@ python -m pytest -q
 
 cd ../frontend
 npm ci
+npm audit --audit-level=low
 npm run check-version
 npm run lint
 npm test

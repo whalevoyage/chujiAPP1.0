@@ -167,7 +167,7 @@ export default function FocusTimer({ label }: Props) {
             {isDone ? '已完成' : isRunning ? '专 注 中' : isPaused ? '已 暂 停' : '准 备 开 始'}
           </p>
           {label ? (
-            <p className="mt-3 text-base sm:text-lg font-medium break-words" style={{ color: bg.text }}>
+            <p className="mt-3 text-base sm:text-lg font-medium wrap-break-word" style={{ color: bg.text }}>
               {label}
             </p>
           ) : null}

@@ -84,7 +84,7 @@ export default function MediaWall({ open, onClose }: Props) {
                   className="h-full w-full object-cover transition group-hover:scale-105"
                   loading="lazy"
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent p-2 pt-6 opacity-0 group-hover:opacity-100 transition">
+                <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/50 to-transparent p-2 pt-6 opacity-0 group-hover:opacity-100 transition">
                   <p className="truncate text-[10px] text-white">{img.filename}</p>
                 </div>
               </button>
