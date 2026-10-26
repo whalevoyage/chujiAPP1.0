@@ -61,7 +61,7 @@ export default function DeletePasswordDialog({
         <div className="mt-4">
           <input
             ref={inputRef}
-            className="w-full rounded-xl border border-[#E6DED3] bg-[#FFFDF8] px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-[#6B7A5A] focus:ring-1 focus:ring-[#6B7A5A]/20"
+            className="w-full rounded-xl border border-[#E6DED3] bg-[#FFFDF8] px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 outline-hidden transition focus:border-[#6B7A5A] focus:ring-1 focus:ring-[#6B7A5A]/20"
             type="password"
             placeholder="请输入删除密码"
             value={password}

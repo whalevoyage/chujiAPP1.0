@@ -216,8 +216,8 @@ function TaskRow({ task, onCheckin, onUndo, onEdit, onDelete, onMakeup }: {
             <CheckCircle2 className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="min-w-0 break-words text-base font-bold text-slate-700">{task.title}</p>
-            {metadata.length > 0 ? <p className="mt-1 break-words text-xs text-slate-400">{metadata.join(' / ')}</p> : null}
+            <p className="min-w-0 wrap-break-word text-base font-bold text-slate-700">{task.title}</p>
+            {metadata.length > 0 ? <p className="mt-1 wrap-break-word text-xs text-slate-400">{metadata.join(' / ')}</p> : null}
           </div>
           <span className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
             task.checked_in ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-[#E6DED3] bg-[#FFFDF8] text-slate-500'

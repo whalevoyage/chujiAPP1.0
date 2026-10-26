@@ -39,6 +39,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=low
       - run: npm run check-version
       - run: npm run lint
       - run: npm test

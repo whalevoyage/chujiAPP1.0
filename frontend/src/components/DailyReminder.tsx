@@ -67,7 +67,7 @@ export default function DailyReminder() {
   return (
     <div className="rounded-xl border border-[#6B7A5A]/30 bg-[#FFFDF8] p-3">
       <input
-        className="w-full bg-transparent text-xs text-slate-700 outline-none"
+        className="w-full bg-transparent text-xs text-slate-700 outline-hidden"
         placeholder="今天想对自己说..."
         value={text}
         onChange={(e) => setText(e.target.value)}

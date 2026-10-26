@@ -30,7 +30,7 @@ export default function WeatherCard() {
   if (!data) {
     return (
       <div className="rounded-xl border border-[#E6DED3] bg-white p-3 animate-pulse">
-        <div className="h-4 w-24 rounded bg-slate-100" />
+        <div className="h-4 w-24 rounded-sm bg-slate-100" />
       </div>
     )
   }

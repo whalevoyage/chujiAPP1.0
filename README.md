@@ -42,6 +42,8 @@ flowchart TB
 
 Android 版可直接安装使用，不需要电脑、局域网或远程 FastAPI 服务器。首次打开会自动建立本机个人档案；结构化数据与本机备份元数据保存在 SQLCipher 加密 SQLite 数据库中，真实附件保存在应用私有文件目录。普通记录和附件可离线新增、查看、编辑和删除。
 
+界面使用 Tailwind CSS v4，浏览器/WebView 需要 Chrome 或 Chromium 111+、Firefox 128+、Safari 16.4+。Android 本机版依赖系统 Android WebView，请先更新 WebView 再安装到较旧设备。
+
 需要联网的可选功能包括 AI 复盘/成绩分析和课表照片 OCR。AI/OCR Key 可在手机内配置，模型请求从手机直接发送给你配置的服务商，不经过本项目服务器。手机本机版不请求实时天气服务，天气卡片显示离线状态；不开启模型服务不影响其他本机功能。
 
 手机本机版支持导入初记 JSON 和完整 ZIP 备份。ZIP 中的附件也会一起导入；旧版服务器 JSON 不含附件原文件。导出通过 Android 分享面板保存或发送文件。卸载应用会清除手机内的数据；更换手机或卸载前请先导出 JSON/ZIP。

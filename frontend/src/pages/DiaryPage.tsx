@@ -159,7 +159,7 @@ export default function DiaryPage() {
                       {entry.is_deleted ? <span className="rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] text-red-500">已删除</span> : null}
                     </div>
                     <p className="mt-1 text-xs text-slate-400">{entry.entry_date}{entry.mood ? ' / ' + entry.mood : ''}</p>
-                    <p className="mt-3 break-words text-sm leading-6 text-slate-600">{summary(entry.content_md)}</p>
+                    <p className="mt-3 wrap-break-word text-sm leading-6 text-slate-600">{summary(entry.content_md)}</p>
                     {entry.tags.length > 0 ? (
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {entry.tags.map(tag => <span key={tag} className="rounded-full bg-[#F5F1EA] px-2 py-0.5 text-[10px] text-[#6B7A5A]">{tag}</span>)}

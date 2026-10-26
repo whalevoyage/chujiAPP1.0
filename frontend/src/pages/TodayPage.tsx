@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MetricCard, ScheduleCard, StatusMetric } from './today/components'
+import { statusClass, statusLabel } from './today/status'
+import type { ScheduleItem } from './today/types'
 import {
   AlertTriangle,
   BookOpen,
@@ -11,7 +14,6 @@ import {
   Frown,
   HelpCircle,
   ListTodo,
-  MapPin,
   Meh,
   Plus,
   Smile,
@@ -65,31 +67,13 @@ type FocusItem =
   | { kind: 'step'; step: PlanStep; title: string; detail: string; description: string | null; status: string }
   | { kind: 'plan'; plan: DailyPlan; title: string; detail: string; description: string | null }
 
-type ScheduleItem =
-  | { kind: 'step'; step: PlanStep; title: string; time: string; subtitle: string; status: string }
-  | { kind: 'course'; course: Course; title: string; time: string; subtitle: string }
-  | { kind: 'task'; task: Task; title: string; time: string; subtitle: string; checkedIn: boolean }
+
 
 const activeStepStatuses = new Set(['pending', 'in_progress', 'delayed'])
 
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    pending: '待开始',
-    in_progress: '进行中',
-    completed: '已完成',
-    delayed: '已延期',
-    skipped: '已跳过',
-  }
-  return labels[status] ?? status
-}
 
-function statusClass(status: string) {
-  if (status === 'completed') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  if (status === 'delayed') return 'border-amber-200 bg-amber-50 text-amber-700'
-  if (status === 'skipped') return 'border-stone-200 bg-stone-100 text-stone-500'
-  if (status === 'in_progress') return 'border-sky-200 bg-sky-50 text-sky-700'
-  return 'border-stone-200 bg-stone-50 text-stone-600'
-}
+
+
 
 function stepTime(step: PlanStep) {
   return `${step.start_time} - ${step.end_time}`
@@ -393,7 +377,7 @@ export default function TodayPage() {
                   <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="break-words text-lg font-extrabold leading-tight text-slate-800">{item.title}</p>
+                        <p className="wrap-break-word text-lg font-extrabold leading-tight text-slate-800">{item.title}</p>
                         {item.kind === 'step' ? (
                           <span className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${statusClass(item.status)}`}>
                             {statusLabel(item.status)}
@@ -401,7 +385,7 @@ export default function TodayPage() {
                         ) : null}
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{item.detail}</p>
-                      {item.description ? <p className="mt-2 break-words text-sm leading-6 text-slate-600">{item.description}</p> : null}
+                      {item.description ? <p className="mt-2 wrap-break-word text-sm leading-6 text-slate-600">{item.description}</p> : null}
                     </div>
                     {item.kind === 'step' ? (
                       <div className="flex shrink-0 flex-wrap gap-2">
@@ -643,7 +627,7 @@ export default function TodayPage() {
         </div>
         {/* Note input */}
         <input
-          className="input mt-2 !h-9 text-xs"
+          className="input mt-2 h-9! text-xs"
           placeholder="写一句今天的状态..."
           value={scoreNote}
           onChange={e => setScoreNote(e.target.value)}
@@ -679,117 +663,4 @@ function formatScoreNote(note: string | null): string {
   if (!note) return ''
   const parts = note.split('|').map((item) => item.trim()).filter(Boolean)
   return parts.length > 0 ? ` · ${parts.join(' · ')}` : ''
-}
-
-function StatusMetric({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-slate-400">{label}</p>
-      <p className="mt-1 truncate font-semibold text-slate-700">{value}</p>
-    </div>
-  )
-}
-
-function MetricCard({ label, value, detail, hint }: { label: string; value: string; detail: string; hint?: string }) {
-  return (
-    <div className="rounded-2xl border border-[#E6DED3] bg-white p-4">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-extrabold">{value}</p>
-      <p className="mt-1 text-sm text-slate-500">{detail}</p>
-      {hint ? <p className="mt-1 text-xs text-[#6B7A5A]">{hint}</p> : null}
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#F5F1EA]">
-        <div className="h-full bg-[#6B7A5A] rounded-full" style={{ width: value.endsWith('%') ? value : '0%' }} />
-      </div>
-    </div>
-  )
-}
-
-function ScheduleCard({
-  item,
-  onCheckin,
-  onUndo,
-  onComplete,
-  onDeleteStep,
-  onDeleteTask,
-  onDeleteCourse,
-}: {
-  item: ScheduleItem
-  onCheckin: (taskId: number) => Promise<void>
-  onUndo: (taskId: number) => Promise<void>
-  onComplete: (stepId: number) => Promise<void>
-  onDeleteStep: (stepId: number) => Promise<void>
-  onDeleteTask: (taskId: number) => Promise<void>
-  onDeleteCourse: (courseId: number) => Promise<void>
-}) {
-  const badge = {
-    step: { label: '规划', cls: 'border-amber-200 bg-amber-50 text-amber-700' },
-    course: { label: '课程', cls: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-    task: { label: '任务', cls: 'border-slate-300 bg-slate-100 text-slate-600' },
-  }[item.kind]
-
-  return (
-    <div className="snap-start shrink-0 w-[260px] rounded-xl border border-[#E6DED3] bg-white p-2.5 md:w-auto">
-      <div className="flex items-start justify-between gap-1">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
-              {badge.label}
-            </span>
-            {item.kind === 'task' && (
-              <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${item.checkedIn ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-100 text-slate-500'}`}>
-                {item.checkedIn ? '已打卡' : '待打卡'}
-              </span>
-            )}
-            {item.kind === 'step' && item.status !== 'pending' && (
-              <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${statusClass(item.status)}`}>
-                {statusLabel(item.status)}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 truncate text-sm font-semibold">{item.title}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
-            {item.time}
-            {item.subtitle ? ' / ' + item.subtitle : ''}
-          </p>
-          {item.kind === 'course' && item.course.location ? (
-            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400">
-              <MapPin className="h-3 w-3" />{item.course.location}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="shrink-0 grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"
-          onClick={() => {
-            if (item.kind === 'step') onDeleteStep(item.step.id)
-            else if (item.kind === 'task') onDeleteTask(item.task.id)
-            else if (item.kind === 'course') onDeleteCourse(item.course.id)
-          }}
-          aria-label="删除"
-        >
-          <XCircle className="h-4 w-4" />
-        </button>
-      </div>
-
-      {item.kind === 'step' ? (
-        <div className="mt-2">
-          <button type="button" onClick={() => onComplete(item.step.id)} className="button-primary text-[11px] h-8 w-full">
-            <CheckCircle2 className="h-3 w-3" />完成
-          </button>
-        </div>
-      ) : item.kind === 'task' && !item.checkedIn ? (
-        <div className="mt-2">
-          <button type="button" onClick={() => onCheckin(item.task.id)} className="button-primary text-[11px] h-8 w-full">
-            <CheckCircle2 className="h-3 w-3" />打卡
-          </button>
-        </div>
-      ) : item.kind === 'task' && item.checkedIn ? (
-        <div className="mt-2">
-          <button type="button" onClick={() => onUndo(item.task.id)} className="button-secondary text-[11px] h-8 w-full">
-            撤销
-          </button>
-        </div>
-      ) : null}
-    </div>
-  )
 }
