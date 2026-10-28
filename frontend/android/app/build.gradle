@@ -1,6 +1,36 @@
+import java.util.Properties
+
 apply plugin: 'com.android.application'
 
 def appVersion = new File(rootProject.projectDir, '../../VERSION').getText('UTF-8').trim()
+def versionParts = appVersion.tokenize('.').collect { it as int }
+if (versionParts.size() != 3 || versionParts.any { it >= 100 }) {
+    throw new GradleException("VERSION must be x.y.z with each component below 100: ${appVersion}")
+}
+def appVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+
+def signingProperties = new Properties()
+def defaultSigningProperties = new File(System.getProperty('user.home'), '.android/chuji-release.properties')
+def signingPropertiesPath = System.getenv('CHUJI_SIGNING_PROPERTIES')
+def signingPropertiesFile = signingPropertiesPath ? new File(signingPropertiesPath) : defaultSigningProperties
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.withInputStream { signingProperties.load(it) }
+}
+def releaseSigningValue = { String key ->
+    System.getenv("CHUJI_${key}") ?: signingProperties.getProperty("CHUJI_${key}")
+}
+def releaseStoreFile = releaseSigningValue('RELEASE_STORE_FILE')
+def releaseStorePassword = releaseSigningValue('RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = releaseSigningValue('RELEASE_KEY_ALIAS')
+def releaseKeyPassword = releaseSigningValue('RELEASE_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
+
+def releaseTasksRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains('assemblerelease') || taskName.toLowerCase().contains('bundlerelease')
+}
+if (releaseTasksRequested && !hasReleaseSigning) {
+    throw new GradleException('Release signing is missing. Configure ~/.android/chuji-release.properties or CHUJI_RELEASE_* environment variables.')
+}
 
 android {
     namespace "com.chuji.personal"
@@ -9,7 +39,7 @@ android {
         applicationId "com.chuji.personal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode appVersionCode
         versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -18,8 +48,19 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -54,3 +95,4 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+

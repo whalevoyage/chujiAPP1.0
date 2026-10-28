@@ -40,3 +40,11 @@ Thumbs.db
 .idea/
 .vscode/
 .aider*
+
+# Android signing material
+*.jks
+*.keystore
+*.p12
+**/chuji-release.properties
+**/local.properties
+

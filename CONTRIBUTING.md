@@ -20,12 +20,14 @@ python -m pytest -q
 
 cd ../frontend
 npm ci
-npm audit --audit-level=low
+npm audit --audit-level=moderate
 npm run check-version
 npm run lint
 npm test
 npm run build
 ```
+
+`npm audit` reports all known dependency advisories. CI fails for moderate or higher severity. The current PWA build chain includes `deepmerge@4.3.1` through `vite-plugin-pwa → workbox-build → @rollup/plugin-node-resolve`; GitHub Advisory Database currently lists GHSA-gcqx-w48m-w2h4 as low severity and has no fixed upstream version. This package is used by the build tooling and is not included in the generated Android APK. Recheck the advisory when updating the PWA toolchain.
 
 修改 Android 相关代码时，另外运行 `npx cap sync android`，并在 `frontend/android` 下执行 `gradlew assembleDebug`。
 
@@ -46,3 +48,4 @@ npm run build
 5. 提交信息使用简洁动词描述，例如 `fix: restrict system backup access`。
 
 添加或升级 Python 依赖时，先更新 `requirements.txt` 或 `requirements-dev.txt`，再重建 `requirements.lock` 和 `requirements-dev.lock`，并运行完整测试。
+
