@@ -10,7 +10,8 @@
     "test": "vitest run",
     "check-version": "node scripts/check-version.mjs",
     "preview": "vite preview",
-    "build:apk": "npm run build && npx cap sync android && cd android && gradlew assembleDebug"
+    "build:apk": "npm run build && npx cap sync android && cd android && gradlew assembleDebug",
+    "build:release": "npm run build && npx cap sync android && cd android && gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^7.0.3",
@@ -51,3 +52,4 @@
     "vitest": "^5.0.5"
   }
 }
+

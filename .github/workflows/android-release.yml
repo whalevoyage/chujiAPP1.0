@@ -1,0 +1,57 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Prepare release signing key
+        env:
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+          CHUJI_RELEASE_STORE_FILE: ${{ github.workspace }}/frontend/android/app/chuji-release.p12
+        run: |
+          test -n "$ANDROID_RELEASE_KEYSTORE_B64" || { echo "Missing ANDROID_RELEASE_KEYSTORE_B64 secret" >&2; exit 1; }
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$CHUJI_RELEASE_STORE_FILE"
+      - name: Build signed Android APK
+        working-directory: frontend
+        env:
+          CHUJI_RELEASE_STORE_FILE: ${{ github.workspace }}/frontend/android/app/chuji-release.p12
+          CHUJI_RELEASE_STORE_PASSWORD: ${{ secrets.CHUJI_RELEASE_STORE_PASSWORD }}
+          CHUJI_RELEASE_KEY_ALIAS: ${{ secrets.CHUJI_RELEASE_KEY_ALIAS }}
+          CHUJI_RELEASE_KEY_PASSWORD: ${{ secrets.CHUJI_RELEASE_KEY_PASSWORD }}
+        run: npm run build:release
+      - name: Create checksum
+        run: sha256sum frontend/android/app/build/outputs/apk/release/app-release.apk > frontend/android/app/build/outputs/apk/release/app-release.apk.sha256
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ github.token }}
+          generate_release_notes: true
+          files: |
+            frontend/android/app/build/outputs/apk/release/app-release.apk
+            frontend/android/app/build/outputs/apk/release/app-release.apk.sha256
+

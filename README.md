@@ -56,7 +56,26 @@ npm ci
 npm run build:apk
 ```
 
-生成文件位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。此调试包已使用 Android 调试签名，可在 Android 手机上直接侧载安装；如果要上架应用商店或发布正式更新，需要使用你自己保管的发布签名重新构建。
+调试包位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
+
+构建正式签名 APK 前，先在本机创建并安全保管发布密钥：
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.android" | Out-Null
+keytool -genkeypair -v -keystore "$env:USERPROFILE\.android\chuji-release.p12" -storetype PKCS12 -alias chuji-release -keyalg RSA -keysize 3072 -validity 10000
+```
+
+按提示设置密码后，在 `$env:USERPROFILE\.android\chuji-release.properties` 保存 `CHUJI_RELEASE_STORE_FILE`、`CHUJI_RELEASE_STORE_PASSWORD`、`CHUJI_RELEASE_KEY_ALIAS` 和 `CHUJI_RELEASE_KEY_PASSWORD` 四项。此文件和 `.p12` 私钥只保存在本机，严禁提交到 GitHub；另做一份安全备份。仓库默认从该 properties 文件读取签名信息，也可用同名环境变量配置。
+
+之后构建正式 APK：
+
+```powershell
+cd frontend
+npm ci
+npm run build:release
+```
+
+正式 APK 位于 `frontend/android/app/build/outputs/apk/release/app-release.apk`。Android `versionCode` 从 `VERSION` 自动生成，后续升级时请递增语义版本。GitHub Actions 可在推送 `v*` 标签时构建并发布 APK；需先在仓库 Actions secrets 配置 `ANDROID_RELEASE_KEYSTORE_B64`、`CHUJI_RELEASE_STORE_PASSWORD`、`CHUJI_RELEASE_KEY_ALIAS` 和 `CHUJI_RELEASE_KEY_PASSWORD`。`ANDROID_RELEASE_KEYSTORE_B64` 是 `.p12` 文件的 Base64 内容。调试版和正式版使用不同签名；从预览版迁移时请先导出 JSON/ZIP，再卸载预览版并导入备份。
 
 ## 技术栈
 
@@ -131,3 +150,4 @@ npm run build:apk
 ## 许可证
 
 本项目以 MIT License 发布，详见 [LICENSE](LICENSE)。第三方依赖仍适用各自的许可证，见 `frontend/package.json`、`frontend/package-lock.json`、`backend/requirements.txt` 和锁定文件。
+
