@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">初记的运行模式与数据流</title>
+  <desc id="desc">Android 本机版将记录保存在手机；Web/PWA 自托管版连接自己的 FastAPI 和 SQLite；AI 与课表 OCR 是可选联网服务。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#879078"/></marker>
+    <marker id="dashArrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#ba8952"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#39412f" flood-opacity=".08"/></filter>
+  </defs>
+  <rect width="1200" height="520" rx="26" fill="#f7f4ee"/>
+  <text x="600" y="48" text-anchor="middle" fill="#283126" font-family="Arial,sans-serif" font-size="25" font-weight="700">本机优先，也支持自托管</text>
+  <g filter="url(#shadow)" font-family="Arial,sans-serif">
+    <rect x="38" y="88" width="350" height="365" rx="22" fill="#fffdf8" stroke="#dcd6ca"/>
+    <rect x="38" y="88" width="350" height="58" rx="22" fill="#6b7a5a"/><path d="M38 124H388V146H38Z" fill="#6b7a5a"/>
+    <text x="213" y="125" text-anchor="middle" fill="#fffdf8" font-size="19" font-weight="700">Android 本机版</text>
+    <text x="70" y="185" fill="#30372c" font-size="17" font-weight="700">手机离线完成日常记录</text>
+    <text x="70" y="221" fill="#5d6256" font-size="15">计划 · 打卡 · 日记 · 课表</text>
+    <text x="70" y="249" fill="#5d6256" font-size="15">成绩 · 荣誉 · 附件 · 复盘</text>
+    <rect x="66" y="282" width="294" height="66" rx="13" fill="#eef0e9"/>
+    <text x="213" y="309" text-anchor="middle" fill="#4f5b42" font-size="14" font-weight="700">SQLCipher 加密 SQLite</text>
+    <text x="213" y="332" text-anchor="middle" fill="#6e7466" font-size="12">结构化数据与备份信息</text>
+    <rect x="66" y="363" width="294" height="58" rx="13" fill="#f4eadc"/>
+    <text x="213" y="388" text-anchor="middle" fill="#88653e" font-size="14" font-weight="700">应用私有附件目录</text>
+    <text x="213" y="409" text-anchor="middle" fill="#82745f" font-size="12">本机保存 · 可导出 ZIP</text>
+
+    <rect x="450" y="88" width="310" height="365" rx="22" fill="#fffdf8" stroke="#dcd6ca"/>
+    <rect x="450" y="88" width="310" height="58" rx="22" fill="#e8e8df"/><path d="M450 124H760V146H450Z" fill="#e8e8df"/>
+    <text x="605" y="125" text-anchor="middle" fill="#41473b" font-size="19" font-weight="700">Web / PWA 自托管</text>
+    <rect x="485" y="177" width="240" height="58" rx="12" fill="#f3f2eb" stroke="#ddd9cd"/>
+    <text x="605" y="202" text-anchor="middle" fill="#30372c" font-size="15" font-weight="700">浏览器</text>
+    <text x="605" y="222" text-anchor="middle" fill="#77796e" font-size="12">Web 或已安装的 PWA</text>
+    <path d="M605 238V266" stroke="#879078" stroke-width="3" marker-end="url(#arrow)"/>
+    <rect x="485" y="275" width="240" height="58" rx="12" fill="#eef0e9" stroke="#d5dacb"/>
+    <text x="605" y="300" text-anchor="middle" fill="#4f5b42" font-size="15" font-weight="700">FastAPI</text>
+    <text x="605" y="320" text-anchor="middle" fill="#6e7466" font-size="12">默认只监听本机地址</text>
+    <path d="M605 336V364" stroke="#879078" stroke-width="3" marker-end="url(#arrow)"/>
+    <rect x="485" y="373" width="240" height="51" rx="12" fill="#f4eadc" stroke="#e5d4be"/>
+    <text x="605" y="405" text-anchor="middle" fill="#88653e" font-size="14" font-weight="700">SQLite · 附件 · 备份</text>
+
+    <rect x="830" y="88" width="330" height="365" rx="22" fill="#fffdf8" stroke="#dcd6ca"/>
+    <rect x="830" y="88" width="330" height="58" rx="22" fill="#f1e4d4"/><path d="M830 124H1160V146H830Z" fill="#f1e4d4"/>
+    <text x="995" y="125" text-anchor="middle" fill="#765a3b" font-size="19" font-weight="700">可选联网服务</text>
+    <text x="995" y="192" text-anchor="middle" fill="#30372c" font-size="16" font-weight="700">AI 复盘 · 课表照片 OCR</text>
+    <text x="995" y="224" text-anchor="middle" fill="#77796e" font-size="13">由用户主动启用</text>
+    <path d="M388 253H414V478H808V253H820" fill="none" stroke="#ba8952" stroke-width="3" stroke-dasharray="8 8" marker-end="url(#dashArrow)"/>
+    <text x="612" y="502" text-anchor="middle" fill="#9a744b" font-size="12">用户启用后，手机直接发送调用所需内容</text>
+    <rect x="875" y="278" width="240" height="95" rx="14" fill="#f7f4ee" stroke="#e4ded2"/>
+    <text x="995" y="312" text-anchor="middle" fill="#30372c" font-size="14" font-weight="700">你配置的模型服务商</text>
+    <text x="995" y="338" text-anchor="middle" fill="#77796e" font-size="12">请求从手机直接发送</text>
+    <text x="995" y="359" text-anchor="middle" fill="#77796e" font-size="12">不经过初记服务器</text>
+    <text x="995" y="412" text-anchor="middle" fill="#6b7a5a" font-size="14" font-weight="700">关闭 AI/OCR，日常功能仍离线</text>
+  </g>
+</svg>

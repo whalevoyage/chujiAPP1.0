@@ -32,6 +32,11 @@ data_backup_final_*
 
 # Environment
 .env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 backend/.env
 
 # OS/editor
@@ -48,3 +53,6 @@ Thumbs.db
 **/chuji-release.properties
 **/local.properties
 
+# Build artifacts
+*.apk
+*.aab

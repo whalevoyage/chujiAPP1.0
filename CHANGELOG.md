@@ -17,6 +17,9 @@
 - 新增 Android 正式签名 APK 构建命令和按版本标签自动发布工作流。
 - Android versionCode 从共享 VERSION 文件生成。
 - 修复 Android APK 构建脚本在 Windows 与 Linux 上调用 Gradle Wrapper 的差异。
+- 重写项目 README，加入应用图标、成长闭环与运行模式示意图。
+- 移除前端目录中的 Vite 模板说明，并修正本地 PowerShell 启动命令。
+- 扩展环境文件与 Android 发布产物的忽略规则。
 - CI 继续报告依赖审计结果，并仅因中危及以上问题失败；记录当前无上游修复版本的低危构建依赖告警。
 
 - 增加后端权限与 IDOR 回归测试、前端 ZIP 安全测试和 GitHub Actions CI。
