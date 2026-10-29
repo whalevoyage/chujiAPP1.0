@@ -1,6 +1,6 @@
 // 一键生成所有 App 图标（PWA + Android）
-// 运行：node scripts/generate-icons.js
-// 依赖：npm install -D sharp
+// 在 frontend 目录运行：npm ci && node scripts/generate-icons.js
+// Sharp 已列在 devDependencies 中。
 
 import sharp from 'sharp'
 import fs from 'node:fs'

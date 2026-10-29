@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+  <title id="title">初记成长闭环</title>
+  <desc id="desc">从目标出发，经过计划、执行、记录和复盘，沉淀到成长档案。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#9a9b84"/></marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#39412f" flood-opacity=".08"/></filter>
+  </defs>
+  <rect width="1200" height="330" rx="26" fill="#f7f4ee"/>
+  <text x="600" y="52" text-anchor="middle" fill="#283126" font-family="Arial,sans-serif" font-size="25" font-weight="700">把每天的小行动，沉淀成长期成长</text>
+  <g stroke="#a1a28e" stroke-width="3" marker-end="url(#arrow)">
+    <path d="M188 182H218"/><path d="M378 182H408"/><path d="M568 182H598"/><path d="M758 182H788"/><path d="M948 182H978"/>
+  </g>
+  <g filter="url(#shadow)" font-family="Arial,sans-serif" text-anchor="middle">
+    <g><rect x="38" y="112" width="150" height="132" rx="18" fill="#fffdf8" stroke="#dcd6ca"/><circle cx="113" cy="151" r="20" fill="#e7eadf"/><text x="113" y="158" font-size="20" fill="#536247" font-weight="700">01</text><text x="113" y="202" font-size="20" fill="#30372c" font-weight="700">目标</text><text x="113" y="226" font-size="13" fill="#77796e">明确方向</text></g>
+    <g><rect x="228" y="112" width="150" height="132" rx="18" fill="#fffdf8" stroke="#dcd6ca"/><circle cx="303" cy="151" r="20" fill="#f2e7d6"/><text x="303" y="158" font-size="20" fill="#9a6b3e" font-weight="700">02</text><text x="303" y="202" font-size="20" fill="#30372c" font-weight="700">计划</text><text x="303" y="226" font-size="13" fill="#77796e">安排今天</text></g>
+    <g><rect x="418" y="112" width="150" height="132" rx="18" fill="#fffdf8" stroke="#dcd6ca"/><circle cx="493" cy="151" r="20" fill="#e7eadf"/><text x="493" y="158" font-size="20" fill="#536247" font-weight="700">03</text><text x="493" y="202" font-size="20" fill="#30372c" font-weight="700">执行</text><text x="493" y="226" font-size="13" fill="#77796e">任务与专注</text></g>
+    <g><rect x="608" y="112" width="150" height="132" rx="18" fill="#fffdf8" stroke="#dcd6ca"/><circle cx="683" cy="151" r="20" fill="#f2e7d6"/><text x="683" y="158" font-size="20" fill="#9a6b3e" font-weight="700">04</text><text x="683" y="202" font-size="20" fill="#30372c" font-weight="700">记录</text><text x="683" y="226" font-size="13" fill="#77796e">日记与成果</text></g>
+    <g><rect x="798" y="112" width="150" height="132" rx="18" fill="#fffdf8" stroke="#dcd6ca"/><circle cx="873" cy="151" r="20" fill="#e7eadf"/><text x="873" y="158" font-size="20" fill="#536247" font-weight="700">05</text><text x="873" y="202" font-size="20" fill="#30372c" font-weight="700">复盘</text><text x="873" y="226" font-size="13" fill="#77796e">发现并改进</text></g>
+    <g><rect x="988" y="112" width="174" height="132" rx="18" fill="#6b7a5a"/><circle cx="1075" cy="151" r="20" fill="#8c987c"/><text x="1075" y="158" font-size="20" fill="#fffdf8" font-weight="700">06</text><text x="1075" y="202" font-size="20" fill="#fffdf8" font-weight="700">成长档案</text><text x="1075" y="226" font-size="13" fill="#f0eee6">长期积累</text></g>
+  </g>
+</svg>
