@@ -16,6 +16,7 @@
 
 - 新增 Android 正式签名 APK 构建命令和按版本标签自动发布工作流。
 - Android versionCode 从共享 VERSION 文件生成。
+- 修复 Android APK 构建脚本在 Windows 与 Linux 上调用 Gradle Wrapper 的差异。
 - CI 继续报告依赖审计结果，并仅因中危及以上问题失败；记录当前无上游修复版本的低危构建依赖告警。
 
 - 增加后端权限与 IDOR 回归测试、前端 ZIP 安全测试和 GitHub Actions CI。
@@ -26,4 +27,5 @@
 - 拆出 Today、Review、Profile 页面展示组件，并补充组件交互测试。
 - 升级 Tailwind CSS 4.3.3 与 Sharp 0.35.5，清除 npm 审计告警；CI 增加完整依赖审计。
 - Tailwind CSS v4 的浏览器最低版本要求已补充到 README。
+
 
