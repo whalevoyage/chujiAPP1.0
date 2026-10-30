@@ -16,24 +16,26 @@
 
 初记把目标、计划、任务、记录、复盘和成果连接成个人成长轨迹。项目提供可离线使用的 Android 本机版，也支持 Web/PWA 自托管。
 
-## 项目图片
+## 快速导航
 
-![初记成长闭环：目标、计划、执行、记录、复盘与成长档案](docs/images/growth-loop.svg)
+[安装 Android 版](#android-本机版) · [功能概览](#功能概览) · [本地运行 WebPWA](#本地运行-webpwa) · [构建 Android](#构建-android) · [参与贡献](#参与贡献)
 
-![初记 Android 本机版、Web/PWA 自托管和可选 AI/OCR 的数据流](docs/images/runtime-modes.svg)
+## 功能概览
 
-## 功能
-
-- 今日安排、计划、任务打卡和专注计时
-- 日记、回忆图片、问题记录和周期复盘
-- 课表、成绩、项目、荣誉和附件管理
-- JSON/ZIP 数据导入导出，ZIP 会包含附件
-- Android 本机版使用 SQLCipher 加密数据库和应用私有附件目录
-- Web/PWA 模式通过 FastAPI 自托管，默认只监听本机地址
+| 场景 | 可以做什么 |
+| --- | --- |
+| 计划与执行 | 制定计划、安排任务、打卡并记录专注时间 |
+| 记录与复盘 | 写日记、保存回忆图片、记录问题并进行周期复盘 |
+| 学业与成果 | 管理课表、成绩、项目、荣誉和附件 |
+| 数据备份 | 导入或导出 JSON / ZIP；ZIP 可包含附件 |
 
 ## Android 本机版
 
-[下载最新 Android 稳定版 APK](https://github.com/whalevoyage/chujiAPP1.0/releases/latest)。首次打开会在手机创建本机档案；常规记录和附件可离线使用，不需要电脑、远程服务器或账号注册。
+1. 在 Android 手机上打开 [最新版本下载页面](https://github.com/whalevoyage/chujiAPP1.0/releases/latest)，下载 `app-release.apk`。
+2. 打开下载的 APK，按系统提示允许从当前来源安装，然后完成安装。
+3. 首次打开后创建本机档案，即可开始使用。
+
+常规记录和附件可离线使用，不需要电脑、远程服务器或账号注册。发布页面还提供 SHA-256 校验文件。
 
 AI 复盘和课表照片 OCR 是可选联网功能。启用时，相关内容由手机直接发送到你配置的模型服务商，不经过初记服务器。未启用模型服务不影响其它本机功能。
 
@@ -95,12 +97,27 @@ CHUJI_RELEASE_KEY_ALIAS=chuji-release
 CHUJI_RELEASE_KEY_PASSWORD=<密钥密码>
 ```
 
-密钥文件和 properties 文件必须保存在仓库外并另做安全备份。正式 APK 输出到 `frontend/android/app/build/outputs/apk/release/app-release.apk`。GitHub Release 工作流使用 Actions Secrets `ANDROID_RELEASE_KEYSTORE_B64`、`CHUJI_RELEASE_STORE_PASSWORD`、`CHUJI_RELEASE_KEY_ALIAS` 和 `CHUJI_RELEASE_KEY_PASSWORD` 签名，并发布 APK 与 SHA-256 校验文件。后续升级请递增根目录 `VERSION`，Android `versionCode` 会按该版本自动生成。
+配置完成后运行 `npm run build:release`。密钥文件和 properties 文件必须保存在仓库外并另做安全备份。正式 APK 输出到 `frontend/android/app/build/outputs/apk/release/app-release.apk`。GitHub Release 工作流使用 Actions Secrets `ANDROID_RELEASE_KEYSTORE_B64`、`CHUJI_RELEASE_STORE_PASSWORD`、`CHUJI_RELEASE_KEY_ALIAS` 和 `CHUJI_RELEASE_KEY_PASSWORD` 签名，并发布 APK 与 SHA-256 校验文件。后续升级请递增根目录 `VERSION`，Android `versionCode` 会按该版本自动生成。
 
 ## 自托管部署
 
 后端默认绑定 `127.0.0.1`，不提供公开注册或社交功能。部署、HTTPS 和备份说明见 [DEPLOY.md](DEPLOY.md)。本地数据与模型服务的隐私边界见 [SECURITY.md](SECURITY.md)。
 
-## 开发与许可
+## 项目结构
 
-技术栈：React、TypeScript、Vite、Tailwind CSS、Capacitor、FastAPI、SQLModel 和 SQLite。贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，变更记录见 [CHANGELOG.md](CHANGELOG.md)。本项目采用 MIT License，详见 [LICENSE](LICENSE)。
+```text
+frontend/   React / TypeScript 界面、PWA 与 Capacitor Android 工程
+backend/    FastAPI 服务、数据库模型与迁移
+contracts/  本地版与服务端共用的核心业务场景
+```
+
+## 参与贡献
+
+欢迎通过 [Issue](https://github.com/whalevoyage/chujiAPP1.0/issues) 报告问题或提出建议，并通过 Pull Request 参与改进。开发环境、检查命令和贡献规范见 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题的私密报告方式见 [SECURITY.md](SECURITY.md)。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+
+技术栈包括 React、TypeScript、Vite、Tailwind CSS、Capacitor、FastAPI、SQLModel 和 SQLite。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE)。
+
