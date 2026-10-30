@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 
@@ -13,7 +14,7 @@ def test_production_health_exposes_only_minimal_status_and_version(client, monke
 
     assert response.status_code == 200
     assert set(response.json()) == {"status", "version", "time"}
-    assert response.json()["version"] == "1.0.0"
+    assert response.json()["version"] == (Path(__file__).resolve().parents[2] / "VERSION").read_text(encoding="utf-8").strip()
     assert response.headers["strict-transport-security"] == "max-age=31536000"
     assert "default-src 'self'" in response.headers["content-security-policy"]
     assert response.headers["x-content-type-options"] == "nosniff"
